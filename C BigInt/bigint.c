@@ -2,7 +2,6 @@
 
 #include <assert.h>
 #include <ctype.h>
-#include <inttypes.h>
 #include <stdio.h>
 #include <intrin.h>
 #include <string.h>
@@ -28,11 +27,25 @@ void bigint_sub(const bigint_t* num1, const bigint_t* num2, bigint_t* out) {
 	}
 }
 void bigint_mul(bigint_t* num1, bigint_t* num2, bigint_t* out) {
-	assert(0);
-
+	bigint_init(out);
+	uint64_t high, low;
+	int k;
+	carry_t carry;
+	for(int j = 0; j < BIGINT_WORD_COUNT; j++) {
+		for(int i = 0; i < BIGINT_WORD_COUNT; i++) {
+			k = i + j;
+			low = _umul128(num1->data[i], num1->data[j], &high);
+			carry = _addcarry_u64(0, out->data[k], low, out->data + k);
+			k++;
+			carry = _addcarry_u64(carry, out->data[k], high, out->data + k);
+			while(carry) {
+				carry = ((out->data[++k] += 1) == 0);
+			}
+		}
+	}
 }
 void bigint_div(bigint_t* num1, bigint_t* num2, bigint_t* out) {
-	assert(0);
+	assert(0); //TODO: this
 	
 }
 
@@ -89,6 +102,14 @@ void bigint_inv(bigint_t* num, bigint_t* out) {
 	for(int i = 0; i < BIGINT_WORD_COUNT; i++) {
 		out->data[i] = ~num->data[i];
 	}
+}
+void bigint_neg(bigint_t* num, bigint_t* out) {
+	bigint_inv(num, out);
+	carry_t carry;
+	int i = 0;
+	do {
+		carry = (out->data[i++] += 1) == 0;
+	} while(carry && i < BIGINT_WORD_COUNT);
 }
 
 

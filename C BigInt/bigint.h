@@ -2,7 +2,7 @@
 
 #include <stdint.h>
 
-#define BIGINT_WORD_COUNT 8
+#define BIGINT_WORD_COUNT 32
 
 typedef struct {
 	uint64_t data[BIGINT_WORD_COUNT];
@@ -23,6 +23,7 @@ void bigint_or(bigint_t* num1, bigint_t* num2, bigint_t* out);
 void bigint_and(bigint_t* num1, bigint_t* num2, bigint_t* out);
 void bigint_xor(bigint_t* num1, bigint_t* num2, bigint_t* out);
 void bigint_inv(bigint_t* num, bigint_t* out);
+void bigint_neg(bigint_t* num, bigint_t* out);
 
 void bigint_from_int(uint64_t val, bigint_t* out);
 //void bigint_from_string(char* str, bigint_t* out);
