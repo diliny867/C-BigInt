@@ -15,13 +15,9 @@ typedef uint8_t carry_t;
 typedef carry_t borrow_t;
 
 #ifdef BIGINT_AUTOEXPAND
-
-#define bigint_expand(num, target) bigint_expand_to(num, target)
-
+	#define bigint_expand(num, target) bigint_expand_to(num, target)
 #else
-
-#define bigint_expand(num, target) 
-
+	#define bigint_expand(num, target) 
 #endif
 
 
@@ -258,15 +254,16 @@ void bigint_lshift1(bigint_t* num, bigint_t* out) {
 	uint32_t size = num->size + (num->data[num->size - 1] >= 0x8000000000000000);
 	bigint_expand(out, size);
 	num->data[size - 1] <<= 1;
-	for(int i = size - 2; i >= 0; i--) {
-		num->data[i + 1] |= (num->data[i] & 0x8000000000000000) > 0;
-		num->data[i] <<= 1;
+	//for(int i = size - 2; i >= 0; i--) {
+	for(uint32_t i = 2; i <= num->size; i++) {
+		num->data[num->size - i + 1] |= (num->data[num->size - i] & 0x8000000000000000) > 0;
+		num->data[num->size - i] <<= 1;
 	}
 }
 void bigint_rshift1(bigint_t* num, bigint_t* out) {
 	bigint_expand(out, num->size);
 	num->data[0] >>= 1;
-	for(int i = 1; i < num->size; i++) {
+	for(uint32_t i = 1; i < num->size; i++) {
 		num->data[i - 1] &= (num->data[i] << 63) | 0x7fffffffffffffff;
 		num->data[i] >>= 1;
 	}
@@ -577,7 +574,7 @@ void bigint_from_int(int64_t val, bigint_t* out) {
 //}
 void bigint_from_hexstring(char* str, bigint_t* out) {
 	bigint_init_default(out);
-	int i = 0;
+	uint32_t i = 0;
 	uint64_t shift = 0;
 	uint64_t tmp;
 #ifdef BIGINT_NEGATIVE
@@ -617,8 +614,8 @@ uint64_t bigint_to_int_greedy(bigint_t* num) {
 //
 //}
 int bigint_to_hexstring(bigint_t* num, char* out, int max_size) {
-	int written = 0;
-	int seen_value = 0;
+	uint32_t written = 0;
+	bool seen_value = false;
 #ifdef BIGINT_NEGATIVE
 	if(num->negative) {
 		putchar('-');
@@ -629,7 +626,7 @@ int bigint_to_hexstring(bigint_t* num, char* out, int max_size) {
 		if(!seen_value && !num->data[num->size - i]){
 			continue;
 		}else {
-			seen_value = 1;
+			seen_value = true;
 		}
 		written += sprintf_s(out, max_size, "%llx", num->data[num->size - i]);
 		out += written;
