@@ -14,15 +14,23 @@
 	#define BIGINT_AUTOSHRINK 
 #endif
 
+#ifdef BIGINT_NONEGATIVE
+	#define BIGINT_MAX_WORD_COUNT UINT32_MAX
+#else
+	#define BIGINT_MAX_WORD_COUNT INT32_MAX
+#endif
+
 //#define BIGINT_WORD_COUNT 32
 
 typedef struct {
 	//uint64_t data[BIGINT_WORD_COUNT];
 	uint64_t* data;
-	uint32_t size;
 	uint32_t capacity;
 #ifndef BIGINT_NONEGATIVE
-	bool negative;
+	uint32_t size : 31;
+	bool negative : 1;
+#else
+	uint32_t size;
 #endif
 } bigint_t;
 
@@ -56,6 +64,7 @@ void bigint_or(bigint_t* num1, bigint_t* num2, bigint_t* out);
 void bigint_and(bigint_t* num1, bigint_t* num2, bigint_t* out);
 void bigint_xor(bigint_t* num1, bigint_t* num2, bigint_t* out);
 void bigint_inv(bigint_t* num, bigint_t* out);
+void bigint_neg(bigint_t* num, bigint_t* out);
 
 void bigint_from_int(int64_t num, bigint_t* out);
 //void bigint_from_string(char* str, bigint_t* out);

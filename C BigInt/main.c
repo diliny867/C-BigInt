@@ -3,7 +3,7 @@
 
 #include "bigint.h"
 
-#define PRINTNUMS(num1, num2, num3, num4, num5, num6)				\
+#define PRINTNUMS(num1, num2, num3, num4, num5, num6)		\
 	do {													\
 		bigint_print_hex(&num1, BIGINT_FLAG_ADD0X);			\
 		printf("\n");										\
@@ -31,8 +31,8 @@ int main(int argc, char** argv) {
 	bigint_init_default(&num5);
 	bigint_init_default(&num6);
 
-	bigint_from_int(0x61287568192, &num1);
-	bigint_from_int(0x1270214, &num2);
+	bigint_from_int(0x61287c568192, &num1);
+	bigint_from_int(0x12e70219, &num2);
 	PRINTNUMS_ALL();
 
 	bigint_add(&num1, &num2, &num3);
@@ -46,6 +46,18 @@ int main(int argc, char** argv) {
 	PRINTNUMS_ALL();
 
 	bigint_sub(&num2, &num5, &num6);
+	PRINTNUMS_ALL();
+
+	//bigint_sub(&num6, &num6, &num6);
+	//PRINTNUMS_ALL();
+
+	bigint_mul(&num4, &num4, &num1);
+	PRINTNUMS_ALL();
+	bigint_mul(&num1, &num1, &num4);
+	PRINTNUMS_ALL();
+	bigint_mul(&num4, &num4, &num1);
+	PRINTNUMS_ALL();
+	bigint_mul(&num1, &num1, &num4);
 	PRINTNUMS_ALL();
 
 	return 0;
