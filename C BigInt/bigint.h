@@ -43,6 +43,7 @@ void bigint_init_default(bigint_t* num);
 void bigint_init_0(bigint_t* num);
 void bigint_init_n(bigint_t* num, uint32_t n);
 void bigint_expand_to(bigint_t* num, uint32_t target);
+void bigint_shrink_zeros(bigint_t* num);
 void bigint_add(bigint_t* num1, bigint_t* num2, bigint_t* out);
 void bigint_sub(bigint_t* num1, bigint_t* num2, bigint_t* out);
 void bigint_mul(bigint_t* num1, bigint_t* num2, bigint_t* out);
@@ -59,6 +60,7 @@ bool bigint_lesser(bigint_t* num1, bigint_t* num2);
 bool bigint_greater(bigint_t* num1, bigint_t* num2);
 bool bigint_eq(bigint_t* num1, bigint_t* num2);
 int bigint_cmp(bigint_t* num1, bigint_t* num2);
+bool bigint_is_zero(bigint_t* num);
 
 void bigint_or(bigint_t* num1, bigint_t* num2, bigint_t* out);
 void bigint_and(bigint_t* num1, bigint_t* num2, bigint_t* out);

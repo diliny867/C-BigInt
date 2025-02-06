@@ -17,7 +17,7 @@
 #endif
 
 #ifdef BIGINT_AUTOSHRINK
-	#define bigint_shrink(num) do{ while(num->size>1 && !num->data[num->size-1]) { num->size--; } }while(0)
+	#define bigint_shrink(num) bigint_shrink_zeros(num)
 #else
 	#define bigint_shrink(num) 
 #endif
@@ -40,6 +40,12 @@ inline void bigint_expand_to(bigint_t* num, uint32_t target) {
 		num->size = target;
 	}
 }
+inline void bigint_shrink_zeros(bigint_t* num) {
+	while(num->size>1 && !num->data[num->size-1]) {
+		num->size--;
+	}
+}
+
 void bigint_init_n(bigint_t* num, uint32_t n) {
 	num->data = calloc(n, sizeof(uint64_t));
 	num->size = 1;
@@ -156,6 +162,7 @@ void bigint_sub(bigint_t* num1, bigint_t* num2, bigint_t* out) {
 #endif
 	bigint_shrink(out);
 }
+
 // https://www.codeproject.com/Articles/1276310/Multiple-Precision-Arithmetic-1st-Multiplication-Algorithm
 static void bigint_mul_(bigint_t* num1, bigint_t* num2, bigint_t* out) { //ignores negatives
 	uint64_t high, low;
@@ -176,31 +183,10 @@ static void bigint_mul_(bigint_t* num1, bigint_t* num2, bigint_t* out) { //ignor
 		}
 	}
 }
-void bigint_mul(bigint_t* num1, bigint_t* num2, bigint_t* out) {
-	uint32_t size = num1->size + num2->size;
-	bigint_expand(out, size);
-	memset(out->data, 0, size * sizeof(uint64_t)); //maybe do something better than clean out number each time
-	bigint_mul_(num1, num2, out);
-#ifndef BIGINT_NONEGATIVE
-	if(num1->negative != num2->negative) {
-		out->negative = true;
-	}
-#endif
-	bigint_shrink(out);
-}
 // https://www.codeproject.com/Articles/1276311/Multiple-Precision-Arithmetic-Division-Algorithm
-void bigint_div(bigint_t* num1, bigint_t* num2, bigint_t* out) { //TODO: this
+static void bigint_div_(bigint_t* num1, bigint_t* num2, bigint_t* out) { //TODO: this
 	assert(0);
 
-	int cmp = bigint_cmp(num1, num2);
-	if(cmp <= 0) {
-		bigint_expand(out, 1);
-		out->size = 1;
-		out->data[0] = cmp == 0;
-	}
-
-	//bigint_expand(out, size);
-	//
 	//int i = BIGINT_WORD_COUNT - 1;
 	//while(i > 0 && num1->data[i] == num2->data[i]) {
 	//	i--;
@@ -213,6 +199,38 @@ void bigint_div(bigint_t* num1, bigint_t* num2, bigint_t* out) { //TODO: this
 	//	return;
 	//}
 
+}
+
+void bigint_mul(bigint_t* num1, bigint_t* num2, bigint_t* out) {
+	uint32_t size = num1->size + num2->size;
+	bigint_expand(out, size);
+	memset(out->data, 0, size * sizeof(uint64_t)); //maybe do something better than clean out number each time
+	bigint_mul_(num1, num2, out);
+#ifndef BIGINT_NONEGATIVE
+	out->negative = num1->negative != num2->negative;
+#endif
+	bigint_shrink(out);
+}
+void bigint_div(bigint_t* num1, bigint_t* num2, bigint_t* out) {
+	int cmp = bigint_cmp(num1, num2);
+	bool right_zero = bigint_is_zero(num2);
+	if(cmp <= 0 || right_zero) {
+		bigint_expand(out, 1);
+		out->size = 1;
+		out->data[0] = (cmp == 0 && !right_zero) ? 1 : 0;
+#ifndef BIGINT_NONEGATIVE
+		out->negative = false;
+#endif
+		bigint_shrink(out);
+		return;
+	}
+	uint32_t size = num1->size;
+	bigint_expand(out, size);
+	memset(out->data, 0, size * sizeof(uint64_t));
+	bigint_div_(num1, num2, out);
+#ifndef BIGINT_NONEGATIVE
+	out->negative = num1->negative != num2->negative;
+#endif
 	bigint_shrink(out);
 }
 
@@ -467,6 +485,10 @@ inline int bigint_cmp(bigint_t* num1, bigint_t* num2) {
 	}
 #endif
 
+}
+
+inline bool bigint_is_zero(bigint_t* num) {
+	return num->size == 1 && num->data[0] == 0;
 }
 
 #define copy_choose(num1, num2, out, i, max_size) \
