@@ -11,24 +11,33 @@
 #define BIGINT_DEFAULT_INIT_WORD_COUNT 1
 
 #ifdef BIGINT_AUTOEXPAND
-	#define bigint_expand(num, target) bigint_expand_to(num, target)
+	#define bigint_try_expand(num, target) bigint_expand(num, target)
 #else
-	#define bigint_expand(num, target) 
+	#define bigint_try_expand(num, target) 
 #endif
 
 #ifdef BIGINT_AUTOSHRINK
-	#define bigint_shrink(num) bigint_shrink_zeros(num)
+	#define bigint_try_shrink(num) bigint_shrink(num)
 #else
-	#define bigint_shrink(num) 
+	#define bigint_try_shrink(num) 
 #endif
 
+#ifndef BIGINT_NONEGATIVE
+//	#define bigint_try_set_negative(num, val) (num)->negative = (val)
+//	#define bigint_try_get_negative(num) (num)->negative
+	#define calc_capacity(size) (1u << (32u - _lzcnt_u32((size) - 1)))
+#else
+//	#define bigint_try_set_negative(num, val)
+//	#define bigint_try_get_negative(num)
+//if we have negatives, size cant possibly become this big (well i guess it anyway possibly cant become this big, but do it just because i thought of it)
+	#define calc_capacity(size) ((size) > 0x10000000 ? 0xFFFFFFFF : (1u << (32u - _lzcnt_u32((size) - 1))))
+#endif
 
 //static inline uint32_t calc_capacity(uint32_t size) {
 //	return 1u << (32u - _lzcnt_u32(size - 1));
 //}
-#define calc_capacity(size) (1u << (32u - _lzcnt_u32((size) - 1)))
 
-inline void bigint_expand_to(bigint_t* num, uint32_t target) {
+inline void bigint_expand(bigint_t* num, uint32_t target) {
 	if(target > num->size){
 		if(num->capacity < target) {
 			num->capacity = calc_capacity(target);
@@ -40,10 +49,14 @@ inline void bigint_expand_to(bigint_t* num, uint32_t target) {
 		num->size = target;
 	}
 }
-inline void bigint_shrink_zeros(bigint_t* num) {
+inline void bigint_shrink(bigint_t* num) {
 	while(num->size>1 && !num->data[num->size-1]) {
 		num->size--;
 	}
+}
+
+void bigint_free(const bigint_t* num) {
+	free(num->data);
 }
 
 void bigint_init_n(bigint_t* num, uint32_t n) {
@@ -55,14 +68,14 @@ void bigint_init_n(bigint_t* num, uint32_t n) {
 #endif
 	//memset(num->data, 0, sizeof(uint64_t) * n);
 }
-void bigint_init_default(bigint_t* num) {
+void bigint_init(bigint_t* num) {
 	bigint_init_n(num, BIGINT_DEFAULT_INIT_WORD_COUNT);
 }
 void bigint_init_0(bigint_t* num) {
 	bigint_init_n(num, 0);
 }
 
-static void bigint_add_(bigint_t* num1, bigint_t* num2, bigint_t* out, uint32_t min_size) { //ignores negatives
+static void bigint_add_(const bigint_t* num1, const bigint_t* num2, bigint_t* out, uint32_t min_size) { //ignores negatives
 	uint32_t i;
 	uint8_t carry = 0;
 	for(i = 0; i < min_size; i++) {
@@ -89,11 +102,12 @@ static void bigint_add_(bigint_t* num1, bigint_t* num2, bigint_t* out, uint32_t 
 
 	if(carry) {
 		out->data[i] = 1;
-	}else {
-		out->size -= 1;
+		i++;
 	}
+
+	out->size = i;
 }
-static void bigint_sub_(bigint_t* num1, bigint_t* num2, bigint_t* out, uint32_t min_size) { //ignores negatives; num1 >= num2
+static void bigint_sub_(const bigint_t* num1, const bigint_t* num2, bigint_t* out, uint32_t min_size) { //ignores negatives; num1 >= num2
 	uint32_t i;
 	uint8_t borrow = 0;
 	for(i = 0; i < min_size; i++) {
@@ -104,21 +118,27 @@ static void bigint_sub_(bigint_t* num1, bigint_t* num2, bigint_t* out, uint32_t 
 		borrow = ((out->data[i] = num1->data[i] - 1) == 0xFFFFFFFFFFFFFFFF);
 		i++;
 	}
+
+	out->size = i;
+
 	while(i < num1->size) {
 		out->data[i] = num1->data[i];
+		if(out->data[i]) {
+			out->size = i + 1;
+		}
 		i++;
 	}
 
-	//if(borrow) {
-	//	out->data[i] = 0xFFFFFFFFFFFFFFFF;
-	//}else {
-	//	out->size -= 1;
-	//}
+	if(!out->data[out->size-1]) {
+		out->size -= 1;
+	}
 }
 
-void bigint_add(bigint_t* num1, bigint_t* num2, bigint_t* out) {
+void bigint_add(const bigint_t* num1, const bigint_t* num2, bigint_t* out) {
 	uint32_t min_size = min(num1->size, num2->size);
-	bigint_expand(out, max(num1->size, num2->size) + 1);
+	if(num1->data[num1->size-1] + num2->data[num2->size-1] < num1->data[num1->size-1]){
+		bigint_try_expand(out, max(num1->size, num2->size) + 1);
+	}
 #ifndef BIGINT_NONEGATIVE
 	if(num1->negative != num2->negative) {
 		if(bigint_lesser(num1, num2)) {
@@ -135,11 +155,11 @@ void bigint_add(bigint_t* num1, bigint_t* num2, bigint_t* out) {
 #else
 	bigint_add_(num1, num2, out, min_size);
 #endif
-	bigint_shrink(out);
+	//bigint_try_shrink(out);
 }
-void bigint_sub(bigint_t* num1, bigint_t* num2, bigint_t* out) {
+void bigint_sub(const bigint_t* num1, const bigint_t* num2, bigint_t* out) {
 	uint32_t min_size = min(num1->size, num2->size);
-	bigint_expand(out, max(num1->size, num2->size));
+	bigint_try_expand(out, max(num1->size, num2->size));
 #ifndef BIGINT_NONEGATIVE
 	if(num1->negative != num2->negative) {
 		bigint_add_(num1, num2, out, min_size);
@@ -160,11 +180,11 @@ void bigint_sub(bigint_t* num1, bigint_t* num2, bigint_t* out) {
 		bigint_sub_(num2, num1, out, min_size);
 	}
 #endif
-	bigint_shrink(out);
+	bigint_try_shrink(out);
 }
 
 // https://www.codeproject.com/Articles/1276310/Multiple-Precision-Arithmetic-1st-Multiplication-Algorithm
-static void bigint_mul_(bigint_t* num1, bigint_t* num2, bigint_t* out) { //ignores negatives
+static void bigint_mul_(const bigint_t* num1, const bigint_t* num2, bigint_t* out) { //ignores negatives
 	uint64_t high, low;
 	uint32_t k;
 	uint8_t carry;
@@ -184,7 +204,7 @@ static void bigint_mul_(bigint_t* num1, bigint_t* num2, bigint_t* out) { //ignor
 	}
 }
 // https://www.codeproject.com/Articles/1276311/Multiple-Precision-Arithmetic-Division-Algorithm
-static void bigint_div_(bigint_t* num1, bigint_t* num2, bigint_t* out) { //TODO: this
+static void bigint_div_(const bigint_t* num1, const bigint_t* num2, bigint_t* out) { //TODO: this
 	assert(0);
 
 	//int i = BIGINT_WORD_COUNT - 1;
@@ -201,49 +221,49 @@ static void bigint_div_(bigint_t* num1, bigint_t* num2, bigint_t* out) { //TODO:
 
 }
 
-void bigint_mul(bigint_t* num1, bigint_t* num2, bigint_t* out) {
+void bigint_mul(const bigint_t* num1, const bigint_t* num2, bigint_t* out) {
 	uint32_t size = num1->size + num2->size;
-	bigint_expand(out, size);
+	bigint_try_expand(out, size);
 	memset(out->data, 0, size * sizeof(uint64_t)); //maybe do something better than clean out number each time
 	bigint_mul_(num1, num2, out);
 #ifndef BIGINT_NONEGATIVE
 	out->negative = num1->negative != num2->negative;
 #endif
-	bigint_shrink(out);
+	bigint_try_shrink(out);
 }
-void bigint_div(bigint_t* num1, bigint_t* num2, bigint_t* out) {
+void bigint_div(const bigint_t* num1, const bigint_t* num2, bigint_t* out) {
 	int cmp = bigint_cmp(num1, num2);
 	bool right_zero = bigint_is_zero(num2);
 	if(cmp <= 0 || right_zero) {
-		bigint_expand(out, 1);
+		bigint_try_expand(out, 1);
 		out->size = 1;
 		out->data[0] = (cmp == 0 && !right_zero) ? 1 : 0;
 #ifndef BIGINT_NONEGATIVE
 		out->negative = false;
 #endif
-		bigint_shrink(out);
+		bigint_try_shrink(out);
 		return;
 	}
 	uint32_t size = num1->size;
-	bigint_expand(out, size);
+	bigint_try_expand(out, size);
 	memset(out->data, 0, size * sizeof(uint64_t));
 	bigint_div_(num1, num2, out);
 #ifndef BIGINT_NONEGATIVE
 	out->negative = num1->negative != num2->negative;
 #endif
-	bigint_shrink(out);
+	bigint_try_shrink(out);
 }
 
-void bigint_copy(bigint_t* num, bigint_t* out) {
-	bigint_expand(out, num->size);
+void bigint_copy(const bigint_t* num, bigint_t* out) {
+	bigint_try_expand(out, num->size);
 	for(uint32_t i = 0; i < num->size; i++) {
 		out->data[i] = num->data[i];
 	}
 }
 
-void bigint_lshift1(bigint_t* num, bigint_t* out) {
+void bigint_lshift1(const bigint_t* num, bigint_t* out) {
 	uint32_t size = num->size + (num->data[num->size - 1] >= 0x8000000000000000);
-	bigint_expand(out, size);
+	bigint_try_expand(out, size);
 	num->data[size - 1] <<= 1;
 	//for(int i = size - 2; i >= 0; i--) {
 	for(uint32_t i = 2; i <= num->size; i++) {
@@ -251,8 +271,8 @@ void bigint_lshift1(bigint_t* num, bigint_t* out) {
 		num->data[num->size - i] <<= 1;
 	}
 }
-void bigint_rshift1(bigint_t* num, bigint_t* out) {
-	bigint_expand(out, num->size);
+void bigint_rshift1(const bigint_t* num, bigint_t* out) {
+	bigint_try_expand(out, num->size);
 	num->data[0] >>= 1;
 	for(uint32_t i = 1; i < num->size; i++) {
 		num->data[i - 1] &= (num->data[i] << 63) | 0x7fffffffffffffff;
@@ -260,12 +280,12 @@ void bigint_rshift1(bigint_t* num, bigint_t* out) {
 	}
 	num->data[num->size - 1] &= 0x7fffffffffffffff;
 }
-void bigint_lshift(bigint_t* num1, uint64_t num2, bigint_t* out) {
+void bigint_lshift(const bigint_t* num1, uint64_t num2, bigint_t* out) {
 	uint64_t offset = num2 / 64;
 	uint32_t shift_val = num2 % 64;
 	uint32_t inv_shift_val = 64 - shift_val;
 	uint32_t size = num1->size + num2;
-	bigint_expand(out, size);
+	bigint_try_expand(out, size);
 	for(uint32_t i = 0; i < size; i++) {
 		if(i + offset < size) {
 			out->data[i + offset] |= num1->data[i] << shift_val;
@@ -275,12 +295,12 @@ void bigint_lshift(bigint_t* num1, uint64_t num2, bigint_t* out) {
 		}
 	}
 }
-void bigint_rshift(bigint_t* num1, uint64_t num2, bigint_t* out) {
+void bigint_rshift(const bigint_t* num1, uint64_t num2, bigint_t* out) {
 	uint64_t offset = num2 / 64;
 	uint32_t shift_val = num2 % 64;
 	uint32_t inv_shift_val = 64 - shift_val;
 	uint32_t i;
-	bigint_expand(out, num1->size);
+	bigint_try_expand(out, num1->size);
 	for(uint32_t index = 1; index <= num1->size; index++) {
 		i = num1->size - index;
 		if((int64_t)(i - offset) >= 0) {
@@ -292,34 +312,7 @@ void bigint_rshift(bigint_t* num1, uint64_t num2, bigint_t* out) {
 	}
 }
 
-inline bool bigint_lesser(bigint_t* num1, bigint_t* num2) {
-//#ifdef BIGINT_NEGATIVE
-//	if(num1->negative != num2->negative) {
-//		return num1->negative;
-//	}
-//#endif
-//	if(num1->size < num2->size) {
-//#ifdef BIGINT_NEGATIVE
-//		return !(num1->negative && num2->negative);
-//#else
-//		return true;
-//#endif
-//	}else if(num1->size == num2->size) {
-//		for(uint32_t i = 1; i <= num1->size; i++) {
-//			if(num1->data[num1->size - i] < num2->data[num1->size - i]) {
-//#ifdef BIGINT_NEGATIVE
-//				return !(num1->negative && num2->negative);
-//#else
-//				return true;
-//#endif
-//			}
-//		}
-//	}
-//#ifdef BIGINT_NEGATIVE
-//	return num1->negative && num2->negative;
-//#else
-//	return false;
-//#endif
+inline bool bigint_lesser(const bigint_t* num1, const bigint_t* num2) {
 #ifndef BIGINT_NONEGATIVE
 	if(num1->negative != num2->negative) {
 		return num1->negative;
@@ -347,34 +340,7 @@ inline bool bigint_lesser(bigint_t* num1, bigint_t* num2) {
 	return false;
 #endif
 }
-inline bool bigint_greater(bigint_t* num1, bigint_t* num2) {
-//#ifdef BIGINT_NEGATIVE
-//	if(num1->negative != num2->negative) {
-//		return num2->negative;
-//	}
-//#endif
-//	if(num1->size > num2->size) {
-//#ifdef BIGINT_NEGATIVE
-//		return !(num1->negative && num2->negative);
-//#else
-//		return true;
-//#endif
-//	}else if(num1->size == num2->size) {
-//		for(uint32_t i = 1; i <= num1->size; i++) {
-//			if(num1->data[num1->size - i] > num2->data[num1->size - i]) {
-//#ifdef BIGINT_NEGATIVE
-//				return !(num1->negative && num2->negative);
-//#else
-//				return true;
-//#endif
-//			}
-//		}
-//	}
-//#ifdef BIGINT_NEGATIVE
-//	return num1->negative && num2->negative;
-//#else
-//	return false;
-//#endif
+inline bool bigint_greater(const bigint_t* num1, const bigint_t* num2) {
 #ifndef BIGINT_NONEGATIVE
 	if(num1->negative != num2->negative) {
 		return num2->negative;
@@ -402,7 +368,7 @@ inline bool bigint_greater(bigint_t* num1, bigint_t* num2) {
 	return false;
 #endif
 }
-inline bool bigint_eq(bigint_t* num1, bigint_t* num2) {
+inline bool bigint_eq(const bigint_t* num1, const bigint_t* num2) {
 #ifndef BIGINT_NONEGATIVE
 	if(num1->negative != num2->negative) {
 		return false;
@@ -418,38 +384,7 @@ inline bool bigint_eq(bigint_t* num1, bigint_t* num2) {
 	}
 	return false;
 }
-inline int bigint_cmp(bigint_t* num1, bigint_t* num2) {
-//#ifdef BIGINT_NEGATIVE
-//	if(num1->negative != num2->negative) {
-//		return num1->negative ? -1 : 1;
-//	}
-//#endif
-//	if(num1->size < num2->size) {
-//#ifdef BIGINT_NEGATIVE
-//		return num1->negative ? 1 : -1;
-//#else
-//		return -1;
-//#endif
-//	}else if(num1->size == num2->size) {
-//		int64_t cmp;
-//		for(uint32_t i = 1; i <= num1->size; i++) {
-//			cmp = num1->data[num1->size - i] - num2->data[num1->size - i];
-//			if(cmp != 0) {
-//#ifdef BIGINT_NEGATIVE
-//				return num1->negative ? (cmp < 0 ? 1 : -1) : (cmp < 0 ? -1 : 1);
-//#else
-//				return cmp < 0 ? -1 : 1;
-//#endif
-//			}
-//		}
-//		return 0;
-//	}else {
-//#ifdef BIGINT_NEGATIVE
-//		return num1->negative ? -1 : 1;
-//#else
-//		return 1;
-//#endif
-//	}
+inline int bigint_cmp(const bigint_t* num1, const bigint_t* num2) {
 #ifndef BIGINT_NONEGATIVE
 	if(num1->negative != num2->negative) {
 		return num1->negative ? -1 : 1;
@@ -487,7 +422,7 @@ inline int bigint_cmp(bigint_t* num1, bigint_t* num2) {
 
 }
 
-inline bool bigint_is_zero(bigint_t* num) {
+inline bool bigint_is_zero(const bigint_t* num) {
 	return num->size == 1 && num->data[0] == 0;
 }
 
@@ -504,44 +439,44 @@ inline bool bigint_is_zero(bigint_t* num) {
 		}										  \
 	} while(0)
 
-void bigint_or(bigint_t* num1, bigint_t* num2, bigint_t* out) {
+void bigint_or(const bigint_t* num1, const bigint_t* num2, bigint_t* out) {
 	uint32_t min_size = min(num1->size, num2->size);
 	uint32_t max_size = max(num1->size, num2->size);
-	bigint_expand(out, max_size);
+	bigint_try_expand(out, max_size);
 	uint32_t i = 0;
 	for(; i < min_size; i++) {
 		out->data[i] = num1->data[i] | num2->data[i];
 	}
 	copy_choose(num1, num2, out, i, max_size);
 }
-void bigint_and(bigint_t* num1, bigint_t* num2, bigint_t* out) {
+void bigint_and(const bigint_t* num1, const bigint_t* num2, bigint_t* out) {
 	uint32_t min_size = min(num1->size, num2->size);
 	uint32_t max_size = max(num1->size, num2->size);
-	bigint_expand(out, max_size);
+	bigint_try_expand(out, max_size);
 	uint32_t i = 0;
 	for(; i < min_size; i++) {
 		out->data[i] = num1->data[i] & num2->data[i];
 	}
 	copy_choose(num1, num2, out, i, max_size);
 }
-void bigint_xor(bigint_t* num1, bigint_t* num2, bigint_t* out) {
+void bigint_xor(const bigint_t* num1, const bigint_t* num2, bigint_t* out) {
 	uint32_t min_size = min(num1->size, num2->size);
 	uint32_t max_size = max(num1->size, num2->size);
-	bigint_expand(out, max_size);
+	bigint_try_expand(out, max_size);
 	uint32_t i = 0;
 	for(; i < min_size; i++) {
 		out->data[i] = num1->data[i] ^ num2->data[i];
 	}
 	copy_choose(num1, num2, out, i, max_size);
 }
-void bigint_inv(bigint_t* num, bigint_t* out) {
-	bigint_expand(out, num->size);
+void bigint_inv(const bigint_t* num, bigint_t* out) {
+	bigint_try_expand(out, num->size);
 	for(uint32_t i = 0; i < num->size; i++) {
 		out->data[i] = ~num->data[i];
 	}
 }
-void bigint_neg(bigint_t* num, bigint_t* out) {
-	bigint_expand(out, num->size);
+void bigint_neg(const bigint_t* num, bigint_t* out) {
+	bigint_try_expand(out, num->size);
 	for(uint32_t i = 0; i < num->size; i++) {
 		out->data[i] = ~num->data[i] + 1;
 	}
@@ -560,7 +495,7 @@ static inline int hexchar_to_int(char c) {
 	return 0;
 }
 void bigint_from_int(int64_t num, bigint_t* out) {
-	bigint_expand_to(out, 1);
+	bigint_try_expand(out, 1);
 #ifndef BIGINT_NONEGATIVE
 	if(num < 0) {
 		out->data[0] = -num;
@@ -572,6 +507,7 @@ void bigint_from_int(int64_t num, bigint_t* out) {
 	out->data[0] = num;
 #endif
 	out->size = 1;
+	bigint_try_shrink(out);
 }
 //void bigint_from_string(char* str, bigint_t* out) {
 //	assert(0);
@@ -579,7 +515,7 @@ void bigint_from_int(int64_t num, bigint_t* out) {
 //
 //}
 void bigint_from_xstring(char* str, bigint_t* out) {
-	bigint_init_default(out);
+	bigint_init(out);
 	uint32_t i = 0;
 	uint64_t shift = 0;
 	uint64_t tmp;
@@ -600,7 +536,7 @@ void bigint_from_xstring(char* str, bigint_t* out) {
 	}
 }
 
-int64_t bigint_to_int(bigint_t* num) {
+int64_t bigint_to_int(const bigint_t* num) {
 #ifndef BIGINT_NONEGATIVE
 	if(num->negative) {
 		return -(int64_t)num->data[0];
@@ -619,7 +555,7 @@ int64_t bigint_to_int_greedy(bigint_t* num) {
 //	assert(0);
 //
 //}
-int bigint_to_xstring(bigint_t* num, char* out, int max_size, int flag) {
+int bigint_to_xstring(const bigint_t* num, char* out, int max_size, int flag) {
 	uint32_t tmp, written = 0;
 #ifndef BIGINT_NONEGATIVE
 	if(num->negative) {
@@ -650,12 +586,13 @@ int bigint_to_xstring(bigint_t* num, char* out, int max_size, int flag) {
 	return written;
 }
 
-void bigint_print_hex(bigint_t* num, int flag) {
+void bigint_print_hex(const bigint_t* num, int flag) {
 #ifndef BIGINT_NONEGATIVE
 	if(num->negative) {
 		printf("-");
 	}
 #endif
+	printf("%d %d ", num->size, num->capacity);
 	if(flag & BIGINT_FLAG_ADD0X) {
 		printf(flag & BIGINT_FLAG_LARGE_LETTERS ? "0X" : "0x");
 	}
