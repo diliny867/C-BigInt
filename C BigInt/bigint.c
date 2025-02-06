@@ -7,7 +7,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define BIGINT_DEFAULT_INIT_WORD_COUNT 1
+#define BIGINT_DEFAULT_INIT_WORD_COUNT 4
 
 #define restrict __restrict
 
@@ -33,11 +33,14 @@ static inline uint32_t calc_capacity(uint32_t size) {
 //}
 inline void bigint_expand_to(bigint_t* num, uint32_t target) {
 	if(target > num->size){
-		num->size = target;
-		if(num->capacity < num->size) {
-			num->capacity = calc_capacity(num->size);
-			num->data = realloc(num->data, sizeof(uint32_t) * num->capacity);
+		if(num->capacity < target) {
+			num->capacity = calc_capacity(target);
+			//num->data = realloc(num->data, num->capacity * sizeof(uint64_t));
+			void* old = num->data;
+			num->data = calloc(num->capacity, sizeof(uint64_t));
+			memcpy(num->data, old, num->size * sizeof(uint64_t));
 		}
+		num->size = target;
 	}
 }
 void bigint_init_n(bigint_t* num, uint32_t n) {
@@ -190,24 +193,30 @@ void bigint_sub(bigint_t* num1, bigint_t* num2, bigint_t* out) {
 }
 // https://www.codeproject.com/Articles/1276310/Multiple-Precision-Arithmetic-1st-Multiplication-Algorithm
 static void bigint_mul_(bigint_t* num1, bigint_t* num2, bigint_t* out) {
-	assert(0);
 	uint32_t size = num1->size + num2->size;
 	bigint_expand(out, size);
 	uint64_t high, low;
-	uint32_t k;
+	uint32_t k = 0;
 	carry_t carry;
 	for(uint32_t j = 0; j < num2->size; j++) {
 		for(uint32_t i = 0; i < num1->size; i++) {
 			k = i + j;
 			low = _umul128(num1->data[i], num2->data[j], &high);
 			carry = _addcarry_u64(0, out->data[k], low, out->data + k);
-			k++;
-			carry = _addcarry_u64(carry, out->data[k], high, out->data + k);
-			while(carry) {
-				carry = ((out->data[++k] += 1) == 0);
+			if(carry || high){
+				k++;
+				carry = _addcarry_u64(carry, out->data[k], high, out->data + k);
+				while(carry) {
+					carry = ((out->data[++k] += 1) == 0);
+				}
 			}
 		}
 	}
+#ifdef BIGINT_AUTOSHRINK
+	while(out->size && !out->data[out->size-1]) {
+		out->size--;
+	}
+#endif
 }
 void bigint_mul(bigint_t* num1, bigint_t* num2, bigint_t* out) {
 	bigint_mul_(num1, num2, out);
@@ -301,7 +310,7 @@ void bigint_rshift(bigint_t* num1, uint64_t num2, bigint_t* out) {
 	}
 }
 
-bool bigint_lesser(bigint_t* num1, bigint_t* num2) {
+inline bool bigint_lesser(bigint_t* num1, bigint_t* num2) {
 //#ifdef BIGINT_NEGATIVE
 //	if(num1->negative != num2->negative) {
 //		return num1->negative;
@@ -356,7 +365,7 @@ bool bigint_lesser(bigint_t* num1, bigint_t* num2) {
 	return false;
 #endif
 }
-bool bigint_greater(bigint_t* num1, bigint_t* num2) {
+inline bool bigint_greater(bigint_t* num1, bigint_t* num2) {
 //#ifdef BIGINT_NEGATIVE
 //	if(num1->negative != num2->negative) {
 //		return num2->negative;
@@ -411,7 +420,7 @@ bool bigint_greater(bigint_t* num1, bigint_t* num2) {
 	return false;
 #endif
 }
-bool bigint_eq(bigint_t* num1, bigint_t* num2) {
+inline bool bigint_eq(bigint_t* num1, bigint_t* num2) {
 #ifdef BIGINT_NEGATIVE
 	if(num1->negative != num2->negative) {
 		return false;
@@ -427,7 +436,7 @@ bool bigint_eq(bigint_t* num1, bigint_t* num2) {
 	}
 	return false;
 }
-int bigint_cmp(bigint_t* num1, bigint_t* num2) {
+inline int bigint_cmp(bigint_t* num1, bigint_t* num2) {
 //#ifdef BIGINT_NEGATIVE
 //	if(num1->negative != num2->negative) {
 //		return num1->negative ? -1 : 1;
@@ -557,14 +566,17 @@ static inline int hexchar_to_int(char c) {
 	}
 	return 0;
 }
-void bigint_from_int(int64_t val, bigint_t* out) {
+void bigint_from_int(int64_t num, bigint_t* out) {
 	bigint_init_n(out, 1);
-	out->data[0] = val;
 #ifdef BIGINT_NEGATIVE
-	if(val < 0) {
-		out->data[0] = -out->data[0];
+	if(num < 0) {
+		out->data[0] = -num;
 		out->negative = true;
+	}else {
+		out->data[0] = num;
 	}
+#else
+	out->data[0] = num;
 #endif
 }
 //void bigint_from_string(char* str, bigint_t* out) {
@@ -572,7 +584,7 @@ void bigint_from_int(int64_t val, bigint_t* out) {
 //	//bigint_init(out);
 //
 //}
-void bigint_from_hexstring(char* str, bigint_t* out) {
+void bigint_from_xstring(char* str, bigint_t* out) {
 	bigint_init_default(out);
 	uint32_t i = 0;
 	uint64_t shift = 0;
@@ -594,47 +606,88 @@ void bigint_from_hexstring(char* str, bigint_t* out) {
 	}
 }
 
-uint64_t bigint_to_int(bigint_t* num) {
+int64_t bigint_to_int(bigint_t* num) {
 #ifdef BIGINT_NEGATIVE
 	if(num->negative) {
-		return -num->data[0];
+		return -(int64_t)num->data[0];
 	}
 #endif
 	return num->data[0];
 }
-
-uint64_t bigint_to_int_greedy(bigint_t* num) {
+int64_t bigint_to_int_greedy(bigint_t* num) {
 	if(num->size > 1) {
 		return 0xFFFFFFFFFFFFFFFF;
 	}
 	return bigint_to_int(num);
 }
+
 //int bigint_to_string(bigint_t* num, char* out, int max_size) {
 //	assert(0);
 //
 //}
-int bigint_to_hexstring(bigint_t* num, char* out, int max_size) {
-	uint32_t written = 0;
+int bigint_to_xstring(bigint_t* num, char* out, int max_size, int flag) {
+	uint32_t tmp, written = 0;
 	bool seen_value = false;
 #ifdef BIGINT_NEGATIVE
 	if(num->negative) {
-		putchar('-');
-		written++;
+		tmp = sprintf_s(out, max_size, "-");
+		written += tmp;
+		out += tmp;
+		max_size -= tmp;
 	}
 #endif
-	for(uint32_t i = 1; i <= num->size; i++) {
+	if(flag & BIGINT_FLAG_ADD0X) {
+		tmp = sprintf_s(out, max_size, flag & BIGINT_FLAG_LARGE_LETTERS ? "0X" : "0x");
+		written += tmp;
+		out += tmp;
+		max_size -= tmp;
+	}
+	if(num->size >= 1) {
+		tmp = sprintf_s(out, max_size, flag & BIGINT_FLAG_LARGE_LETTERS ? "%llX" : "%llx", num->data[num->size - 1]);
+		written += tmp;
+		out += tmp;
+		max_size -= tmp;
+	}
+	for(uint32_t i = 2; i <= num->size; i++) {
 		if(!seen_value && !num->data[num->size - i]){
 			continue;
 		}else {
 			seen_value = true;
 		}
-		written += sprintf_s(out, max_size, "%llx", num->data[num->size - i]);
-		out += written;
-		max_size -= written;
+		tmp = sprintf_s(out, max_size, flag & BIGINT_FLAG_LARGE_LETTERS ? "%016llX" : "%016llx", num->data[num->size - i]);
+		written += tmp;
+		out += tmp;
+		max_size -= tmp;
 	}
 	if(!seen_value){
 		written += sprintf_s(out, max_size, "0");
 	}
 	return written;
+}
+
+void bigint_print_xstring(bigint_t* num, int flag) {
+	bool seen_value = false;
+#ifdef BIGINT_NEGATIVE
+	if(num->negative) {
+		printf("-");
+	}
+#endif
+	if(flag & BIGINT_FLAG_ADD0X) {
+		printf(flag & BIGINT_FLAG_LARGE_LETTERS ? "0X" : "0x");
+	}
+	if(num->size >= 1) {
+		printf(flag & BIGINT_FLAG_LARGE_LETTERS ? "%llX" : "%llx", num->data[num->size - 1]);
+	}
+	for(uint32_t i = 2; i <= num->size; i++) {
+		if(!seen_value && !num->data[num->size - i]){
+			continue;
+		}else {
+			seen_value = true;
+		}
+		printf(flag & BIGINT_FLAG_LARGE_LETTERS ? "%016llX" : "%016llx", num->data[num->size - i]);
+	}
+	if(!seen_value){
+		printf("0");
+	}
 }
 

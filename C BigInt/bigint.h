@@ -5,7 +5,12 @@
 
 
 #define BIGINT_NEGATIVE
-#define BIGINT_AUTOEXPAND
+#define BIGINT_AUTOMANAGE
+
+#ifdef BIGINT_AUTOMANAGE
+	#define BIGINT_AUTOEXPAND
+	#define BIGINT_AUTOSHRINK 
+#endif
 
 //#define BIGINT_WORD_COUNT 32
 
@@ -18,6 +23,10 @@ typedef struct {
 	bool negative;
 #endif
 } bigint_t;
+
+
+#define BIGINT_FLAG_ADD0X 1
+#define BIGINT_FLAG_LARGE_LETTERS 2
 
 
 void bigint_init_default(bigint_t* num);
@@ -46,10 +55,12 @@ void bigint_and(bigint_t* num1, bigint_t* num2, bigint_t* out);
 void bigint_xor(bigint_t* num1, bigint_t* num2, bigint_t* out);
 void bigint_inv(bigint_t* num, bigint_t* out);
 
-void bigint_from_int(int64_t val, bigint_t* out);
+void bigint_from_int(int64_t num, bigint_t* out);
 //void bigint_from_string(char* str, bigint_t* out);
-void bigint_from_hexstring(char* str, bigint_t* out);
-uint64_t bigint_to_int(bigint_t* num);
-uint64_t bigint_to_int_greedy(bigint_t* num);
+void bigint_from_xstring(char* str, bigint_t* out);
+int64_t bigint_to_int(bigint_t* num);
+int64_t bigint_to_int_greedy(bigint_t* num);
 //int bigint_to_string(bigint_t* num, char* out, int max_size);
-int bigint_to_hexstring(bigint_t* num, char* out, int max_size);
+int bigint_to_xstring(bigint_t* num, char* out, int max_size, int flag);
+
+void bigint_print_xstring(bigint_t* num, int flag);
