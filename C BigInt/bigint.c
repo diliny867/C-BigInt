@@ -20,17 +20,18 @@ typedef carry_t borrow_t;
 	#define bigint_expand(num, target) 
 #endif
 
+#ifdef BIGINT_AUTOSHRINK
+	#define bigint_shrink(num) do{ while(num->size>1 && !num->data[num->size-1]) { num->size--; } }while(0)
+#else
+	#define bigint_shrink(num) 
+#endif
 
-static inline uint32_t calc_capacity(uint32_t size) {
-	return 1u << (32u - _lzcnt_u32(size - 1));
-}
-//inline void bigint_expand_by(bigint_t* num, uint32_t delta) {
-//	num->size += delta;
-//	if(num->capacity < num->size) {
-//		num->capacity = calc_capacity(num->size);
-//		num->data = realloc(num->data, sizeof(uint32_t) * num->capacity);
-//	}
+
+//static inline uint32_t calc_capacity(uint32_t size) {
+//	return 1u << (32u - _lzcnt_u32(size - 1));
 //}
+#define calc_capacity(size) (1u << (32u - _lzcnt_u32(size - 1)))
+
 inline void bigint_expand_to(bigint_t* num, uint32_t target) {
 	if(target > num->size){
 		if(num->capacity < target) {
@@ -106,81 +107,55 @@ static void bigint_sub_(bigint_t* num1, bigint_t* num2, bigint_t* out, uint32_t 
 		i++;
 	}
 
+	while(i < num2->size && borrow) {
+		borrow = ((out->data[i] = num2->data[i] - 1) == 0xFFFFFFFFFFFFFFFF);
+		i++;
+	}
+	while(i < num2->size) {
+		out->data[i] = num2->data[i];
+		i++;
+	}
+
 	//if(borrow) {
 	//	out->data[i] = 0xFFFFFFFFFFFFFFFF;
 	//}else {
 	//	out->size -= 1;
 	//}
-
-
-	//uint32_t i;
-	//borrow_t borrow = 0;
-	//if(num1->size < num2->size) {
-	//	bigint_expand_to(out, num2->size);
-	//	for(i = 0; i < num1->size; i++) {
-	//		borrow = _subborrow_u64(borrow, num1->data[i], num2->data[i], out->data + i);
-	//	}
-	//	for(; i < num2->size; i++) {
-	//		out->data[i] = num2->data[i] - borrow;
-	//		borrow = out->data[i] > num2->data[i];
-	//	}
-	//}else if(num1->size == num2->size){
-	//	bigint_expand_to(out, num1->size);
-	//	for(i = 0; i < num1->size; i++) {
-	//		borrow = _subborrow_u64(borrow, num1->data[i], num2->data[i], out->data + i);
-	//	}
-	//	out->data[i] -= borrow;
-	//	if(out->data[i] == 0xffffffffffffffff) {
-	//		while(i < out->size) {
-	//			out->data[i++] = 0xffffffffffffffff;
-	//		}
-	//	}
-	//}else {
-	//	bigint_expand_to(out, num1->size);
-	//	for(i = 0; i < num2->size; i++) {
-	//		borrow = _subborrow_u64(borrow, num1->data[i], num2->data[i], out->data + i);
-	//	}
-	//	for(; i < num1->size; i++) {
-	//		out->data[i] = num1->data[i] - borrow;
-	//		borrow = out->data[i] > num1->data[i];
-	//	}
-	//}
 }
 
 void bigint_add(bigint_t* num1, bigint_t* num2, bigint_t* out) {
-	uint32_t min_size = min(num1->size, num2->size);
-	bigint_expand(out, min_size + 1);
+	bigint_expand(out, max(num1->size, num2->size) + 1);
 #ifndef BIGINT_NONEGATIVE
 	if(num1->negative != num2->negative) {
 		if(bigint_lesser(num1, num2)) {
-			bigint_sub_(num2, num1, out, min_size);
+			bigint_sub_(num2, num1, out, min(num1->size, num2->size));
 			out->negative = num2->negative;
 		}else {
-			bigint_sub_(num1, num2, out, min_size);
+			bigint_sub_(num1, num2, out, min(num1->size, num2->size));
 			out->negative = num1->negative;
 		}
 	}else {
-		bigint_add_(num1, num2, out, min_size);
+		bigint_add_(num1, num2, out, min(num1->size, num2->size));
 		out->negative = num1->negative && num2->negative;
 	}
 #else
 	bigint_add_(num1, num2, out, min_size);
 #endif
+	bigint_shrink(out);
 }
 void bigint_sub(bigint_t* num1, bigint_t* num2, bigint_t* out) {
-	uint32_t min_size = min(num1->size, num2->size);
-	bigint_expand(out, min_size);
+	bigint_expand(out, max(num1->size, num2->size));
 #ifndef BIGINT_NONEGATIVE
 	if(num1->negative != num2->negative) {
-		bigint_add_(num1, num2, out, min_size);
+		bigint_add_(num1, num2, out, min(num1->size, num2->size));
 		out->negative = num1->negative;
 	}else {
-		if(bigint_greater(num1, num2)) {
-			bigint_sub_(num1, num2, out, min_size);
-			out->negative = num1->negative && num2->negative;
-		}else {
-			bigint_sub_(num2, num1, out, min_size);
+		if(bigint_lesser(num1, num2)) {
+			bigint_sub_(num2, num1, out, min(num1->size, num2->size));
 			out->negative = !(num1->negative && num2->negative);
+		}else {
+			bigint_sub_(num1, num2, out, min(num1->size, num2->size));
+			out->negative = num1->negative && num2->negative;
 		}
 	}
 #else
@@ -190,13 +165,12 @@ void bigint_sub(bigint_t* num1, bigint_t* num2, bigint_t* out) {
 		bigint_sub_(num2, num1, out, min_size);
 	}
 #endif
+	bigint_shrink(out);
 }
 // https://www.codeproject.com/Articles/1276310/Multiple-Precision-Arithmetic-1st-Multiplication-Algorithm
 static void bigint_mul_(bigint_t* num1, bigint_t* num2, bigint_t* out) {
-	uint32_t size = num1->size + num2->size;
-	bigint_expand(out, size);
 	uint64_t high, low;
-	uint32_t k = 0;
+	uint32_t k;
 	carry_t carry;
 	for(uint32_t j = 0; j < num2->size; j++) {
 		for(uint32_t i = 0; i < num1->size; i++) {
@@ -212,19 +186,18 @@ static void bigint_mul_(bigint_t* num1, bigint_t* num2, bigint_t* out) {
 			}
 		}
 	}
-#ifdef BIGINT_AUTOSHRINK
-	while(out->size && !out->data[out->size-1]) {
-		out->size--;
-	}
-#endif
 }
 void bigint_mul(bigint_t* num1, bigint_t* num2, bigint_t* out) {
+	uint32_t size = num1->size + num2->size;
+	bigint_expand(out, size);
+	memset(out->data, 0, size * sizeof(uint64_t)); //maybe do something better than clean out number each time
 	bigint_mul_(num1, num2, out);
 #ifndef BIGINT_NONEGATIVE
 	if(num1->negative != num2->negative) {
 		out->negative = true;
 	}
 #endif
+	bigint_shrink(out);
 }
 // https://www.codeproject.com/Articles/1276311/Multiple-Precision-Arithmetic-Division-Algorithm
 void bigint_div(bigint_t* num1, bigint_t* num2, bigint_t* out) { //TODO: this
@@ -251,7 +224,7 @@ void bigint_div(bigint_t* num1, bigint_t* num2, bigint_t* out) { //TODO: this
 	//	return;
 	//}
 
-
+	bigint_shrink(out);
 }
 
 void bigint_copy(bigint_t* num, bigint_t* out) {
