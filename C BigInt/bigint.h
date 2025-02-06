@@ -4,10 +4,12 @@
 #include <stdbool.h>
 
 
-#define BIGINT_NEGATIVE
-#define BIGINT_AUTOMANAGE
+//#define BIGINT_NONEGATIVE
 
-#ifdef BIGINT_AUTOMANAGE
+//dont do this
+//#define BIGINT_MANUALMANAGE
+
+#ifndef BIGINT_MANUALMANAGE
 	#define BIGINT_AUTOEXPAND
 	#define BIGINT_AUTOSHRINK 
 #endif
@@ -19,7 +21,7 @@ typedef struct {
 	uint64_t* data;
 	uint32_t size;
 	uint32_t capacity;
-#ifdef BIGINT_NEGATIVE
+#ifndef BIGINT_NONEGATIVE
 	bool negative;
 #endif
 } bigint_t;
@@ -63,4 +65,4 @@ int64_t bigint_to_int_greedy(bigint_t* num);
 //int bigint_to_string(bigint_t* num, char* out, int max_size);
 int bigint_to_xstring(bigint_t* num, char* out, int max_size, int flag);
 
-void bigint_print_xstring(bigint_t* num, int flag);
+void bigint_print_hex(bigint_t* num, int flag);

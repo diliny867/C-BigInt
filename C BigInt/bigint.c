@@ -45,9 +45,9 @@ inline void bigint_expand_to(bigint_t* num, uint32_t target) {
 }
 void bigint_init_n(bigint_t* num, uint32_t n) {
 	num->data = calloc(n, sizeof(uint64_t));
-	num->size = n;
+	num->size = 1;
 	num->capacity = calc_capacity(n);
-#ifdef BIGINT_NEGATIVE
+#ifndef BIGINT_NONEGATIVE
 	num->negative = false;
 #endif
 	//memset(num->data, 0, sizeof(uint64_t) * n);
@@ -150,7 +150,7 @@ static void bigint_sub_(bigint_t* num1, bigint_t* num2, bigint_t* out, uint32_t 
 void bigint_add(bigint_t* num1, bigint_t* num2, bigint_t* out) {
 	uint32_t min_size = min(num1->size, num2->size);
 	bigint_expand(out, min_size + 1);
-#ifdef BIGINT_NEGATIVE
+#ifndef BIGINT_NONEGATIVE
 	if(num1->negative != num2->negative) {
 		if(bigint_lesser(num1, num2)) {
 			bigint_sub_(num2, num1, out, min_size);
@@ -170,7 +170,7 @@ void bigint_add(bigint_t* num1, bigint_t* num2, bigint_t* out) {
 void bigint_sub(bigint_t* num1, bigint_t* num2, bigint_t* out) {
 	uint32_t min_size = min(num1->size, num2->size);
 	bigint_expand(out, min_size);
-#ifdef BIGINT_NEGATIVE
+#ifndef BIGINT_NONEGATIVE
 	if(num1->negative != num2->negative) {
 		bigint_add_(num1, num2, out, min_size);
 		out->negative = num1->negative;
@@ -184,7 +184,7 @@ void bigint_sub(bigint_t* num1, bigint_t* num2, bigint_t* out) {
 		}
 	}
 #else
-	if(bigint_greater(num1, num2){
+	if(bigint_greater(num1, num2)) {
 		bigint_sub_(num1, num2, out, min_size);
 	}else {
 		bigint_sub_(num2, num1, out, min_size);
@@ -220,9 +220,11 @@ static void bigint_mul_(bigint_t* num1, bigint_t* num2, bigint_t* out) {
 }
 void bigint_mul(bigint_t* num1, bigint_t* num2, bigint_t* out) {
 	bigint_mul_(num1, num2, out);
+#ifndef BIGINT_NONEGATIVE
 	if(num1->negative != num2->negative) {
 		out->negative = true;
 	}
+#endif
 }
 // https://www.codeproject.com/Articles/1276311/Multiple-Precision-Arithmetic-Division-Algorithm
 void bigint_div(bigint_t* num1, bigint_t* num2, bigint_t* out) { //TODO: this
@@ -338,7 +340,7 @@ inline bool bigint_lesser(bigint_t* num1, bigint_t* num2) {
 //#else
 //	return false;
 //#endif
-#ifdef BIGINT_NEGATIVE
+#ifndef BIGINT_NONEGATIVE
 	if(num1->negative != num2->negative) {
 		return num1->negative;
 	}
@@ -393,7 +395,7 @@ inline bool bigint_greater(bigint_t* num1, bigint_t* num2) {
 //#else
 //	return false;
 //#endif
-#ifdef BIGINT_NEGATIVE
+#ifndef BIGINT_NONEGATIVE
 	if(num1->negative != num2->negative) {
 		return num2->negative;
 	}
@@ -421,7 +423,7 @@ inline bool bigint_greater(bigint_t* num1, bigint_t* num2) {
 #endif
 }
 inline bool bigint_eq(bigint_t* num1, bigint_t* num2) {
-#ifdef BIGINT_NEGATIVE
+#ifndef BIGINT_NONEGATIVE
 	if(num1->negative != num2->negative) {
 		return false;
 	}
@@ -468,7 +470,7 @@ inline int bigint_cmp(bigint_t* num1, bigint_t* num2) {
 //		return 1;
 //#endif
 //	}
-#ifdef BIGINT_NEGATIVE
+#ifndef BIGINT_NONEGATIVE
 	if(num1->negative != num2->negative) {
 		return num1->negative ? -1 : 1;
 	}
@@ -567,8 +569,8 @@ static inline int hexchar_to_int(char c) {
 	return 0;
 }
 void bigint_from_int(int64_t num, bigint_t* out) {
-	bigint_init_n(out, 1);
-#ifdef BIGINT_NEGATIVE
+	bigint_expand_to(out, 1);
+#ifndef BIGINT_NONEGATIVE
 	if(num < 0) {
 		out->data[0] = -num;
 		out->negative = true;
@@ -578,6 +580,7 @@ void bigint_from_int(int64_t num, bigint_t* out) {
 #else
 	out->data[0] = num;
 #endif
+	out->size = 1;
 }
 //void bigint_from_string(char* str, bigint_t* out) {
 //	assert(0);
@@ -589,7 +592,7 @@ void bigint_from_xstring(char* str, bigint_t* out) {
 	uint32_t i = 0;
 	uint64_t shift = 0;
 	uint64_t tmp;
-#ifdef BIGINT_NEGATIVE
+#ifndef BIGINT_NONEGATIVE
 	if(*str == '-') {
 		out->negative = true;
 		str++;
@@ -607,7 +610,7 @@ void bigint_from_xstring(char* str, bigint_t* out) {
 }
 
 int64_t bigint_to_int(bigint_t* num) {
-#ifdef BIGINT_NEGATIVE
+#ifndef BIGINT_NONEGATIVE
 	if(num->negative) {
 		return -(int64_t)num->data[0];
 	}
@@ -627,8 +630,7 @@ int64_t bigint_to_int_greedy(bigint_t* num) {
 //}
 int bigint_to_xstring(bigint_t* num, char* out, int max_size, int flag) {
 	uint32_t tmp, written = 0;
-	bool seen_value = false;
-#ifdef BIGINT_NEGATIVE
+#ifndef BIGINT_NONEGATIVE
 	if(num->negative) {
 		tmp = sprintf_s(out, max_size, "-");
 		written += tmp;
@@ -649,25 +651,16 @@ int bigint_to_xstring(bigint_t* num, char* out, int max_size, int flag) {
 		max_size -= tmp;
 	}
 	for(uint32_t i = 2; i <= num->size; i++) {
-		if(!seen_value && !num->data[num->size - i]){
-			continue;
-		}else {
-			seen_value = true;
-		}
 		tmp = sprintf_s(out, max_size, flag & BIGINT_FLAG_LARGE_LETTERS ? "%016llX" : "%016llx", num->data[num->size - i]);
 		written += tmp;
 		out += tmp;
 		max_size -= tmp;
 	}
-	if(!seen_value){
-		written += sprintf_s(out, max_size, "0");
-	}
 	return written;
 }
 
-void bigint_print_xstring(bigint_t* num, int flag) {
-	bool seen_value = false;
-#ifdef BIGINT_NEGATIVE
+void bigint_print_hex(bigint_t* num, int flag) {
+#ifndef BIGINT_NONEGATIVE
 	if(num->negative) {
 		printf("-");
 	}
@@ -679,15 +672,7 @@ void bigint_print_xstring(bigint_t* num, int flag) {
 		printf(flag & BIGINT_FLAG_LARGE_LETTERS ? "%llX" : "%llx", num->data[num->size - 1]);
 	}
 	for(uint32_t i = 2; i <= num->size; i++) {
-		if(!seen_value && !num->data[num->size - i]){
-			continue;
-		}else {
-			seen_value = true;
-		}
 		printf(flag & BIGINT_FLAG_LARGE_LETTERS ? "%016llX" : "%016llx", num->data[num->size - i]);
-	}
-	if(!seen_value){
-		printf("0");
 	}
 }
 
