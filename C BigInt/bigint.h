@@ -43,7 +43,7 @@ void bigint_mul(const bigint_t num1, const bigint_t num2, bigint_t* out);
 int  bigint_div(const bigint_t num1, const bigint_t num2, bigint_t* out, bigint_t* r);
 
 int  bigint_mod(const bigint_t num1, const bigint_t num2, bigint_t* out);
-int  bigint_sqrt(const bigint_t num, bigint_t* out);
+int  bigint_sqrt(const bigint_t num, bigint_t* out, bool ceil);
 
 void bigint_copy(const bigint_t num, bigint_t* out);
 

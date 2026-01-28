@@ -62,21 +62,23 @@ int main(int argc, char** argv) {
 
     PRINTNUMS_ALL();
 
-    bigint_sqrt(num3, &num5);
-    //bigint_sqrt(num4, &num6);
+    bigint_sqrt(num3, &num5, 0);
+    bigint_sqrt(num4, &num6, 0);
 
     PRINTNUMS_ALL();
 
-    //bigint_mul(num3, num3, &num4);
-    //bigint_mul(num4, num4, &num3);
-    //bigint_mul(num3, num3, &num4);
-    //bigint_mul(num4, num4, &num3);
-    //bigint_mul(num3, num3, &num4);
-    //bigint_mul(num4, num4, &num3);
-    //bigint_mul(num3, num3, &num4);
-    //bigint_mul(num4, num4, &num3);
+    bigint_mul(num3, num3, &num4);
+    bigint_mul(num4, num4, &num3);
+    bigint_mul(num3, num3, &num4);
+    bigint_mul(num4, num4, &num3);
+    bigint_mul(num3, num3, &num4);
+    bigint_mul(num4, num4, &num3);
+    bigint_mul(num3, num3, &num4);
+    bigint_mul(num4, num4, &num3);
 
-    //PRINTNUMS_ALL();
+    bigint_sqrt(num4, &num6, 0);
+
+    PRINTNUMS_ALL();
 
     /*
     bigint_add(num1, num2, &num3);

@@ -369,7 +369,8 @@ static void bigint_div_(bigint_value_t* data1, bigint_size_t size1, bigint_value
     bigint_copy_(data_a + ai_start, *size_r, data_r); // ai will be in r
 
     while(1){
-        ai_left = data_r[*size_r - 1];
+        ai_left = *size_r == 0 ? 0 : data_r[*size_r - 1];
+
         int cmp = bigint_abscmp_(data_r, *size_r, data_b, size_b);
         if(cmp < 0){
             qi = 0;
@@ -974,7 +975,8 @@ bigint_value_t bigint_print(const bigint_t num, int flag){
     }
 
     for(bigint_value_t i = 0; i < count; i++) {
-        printf("%c", nums_from[count - i - 1]);
+        putchar(nums_from[count - i - 1]);
+        //printf("%c", nums_from[count - i - 1]);
     }
 
     bigint_destroy(&tmp1);
