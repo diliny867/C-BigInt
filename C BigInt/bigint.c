@@ -804,15 +804,15 @@ int bigint_to_string(const bigint_t num, char* out, int max_size) {
 
 int bigint_to_xstring(const bigint_t num, char* out, int max_size, int flag) {
     int written = 0;
-    int large_letters = flag & BIGINT_FLAG_LARGE_LETTERS;
-    int pad = flag & BIGINT_FLAG_PAD_HEX;
+    int large_letters = flag & BIF_LARGE_LETTERS;
+    int pad = flag & BIF_PAD_HEX;
     char* format;
 
     if(num.negative) {
         written += sprintf_s(out + written, max_size - written, "-");
     }
 
-    if(flag & BIGINT_FLAG_ADD0X) {
+    if(flag & BIF_ADD0X) {
         written += sprintf_s(out + written, max_size - written, large_letters ? "0X" : "0x");
     }
 
@@ -829,16 +829,28 @@ int bigint_to_xstring(const bigint_t num, char* out, int max_size, int flag) {
 
 int bigint_print_hex(const bigint_t num, int flag) {
     int written = 0;
-    int large_letters = flag & BIGINT_FLAG_LARGE_LETTERS;
-    int pad = flag & BIGINT_FLAG_PAD_HEX;
+    int large_letters = flag & BIF_LARGE_LETTERS;
+    int pad = flag & BIF_PAD_HEX;
     char* format;
+
+    int zeros = num.size == 0 ? 0 : 64 - (int)msb_zeros(num.data[num.size - 1]);
+    bigint_value_t count = (num.size - 1) * 16llu + (zeros == 0 ? 0 : zeros - 1) / 4 + 1;
+
+    if(flag & BIF_PRINT_COUNT){
+        printf("digits: %llu ", count);
+    }
 
     if(num.negative) {
         written += printf("-");
     }
 
-    if(flag & BIGINT_FLAG_ADD0X) {
+    if(flag & BIF_ADD0X) {
         written += printf(large_letters ? "0X" : "0x");
+    }
+
+    if(num.size == 0) {
+        written += printf("0");
+        return written;
     }
 
     format = pad ? (large_letters ? "%016llX" : "%016llx") : (large_letters ? "%llX" : "%llx");
@@ -860,7 +872,7 @@ int bigint_print(const bigint_t num, int flag){
     int written = 0, n;
     bigint_value_t ten = 10, count = 0;
     bigint_t d, bignum;
-    bigint_t tmp1 = { 0 }, tmp2;
+    bigint_t tmp1, tmp2;
     bigint_init_from(&d, &ten, 1, 1);
     bigint_init_n(&bignum, num.size);
     bigint_init_n(&tmp1, num.size);
@@ -884,6 +896,10 @@ int bigint_print(const bigint_t num, int flag){
 
         count++;
     } while(!bigint_is_zero(tmp1));
+
+    if(flag & BIF_PRINT_COUNT){
+        printf("digits: %llu ", count);
+    }
 
     for(bigint_value_t i = 0; i < count; i++) {
         printf("%c", nums_from[count - i - 1]);

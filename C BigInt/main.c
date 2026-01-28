@@ -13,7 +13,7 @@
         print_bigint(num6, FLAG, #num6);                       \
     } while(0)
 
-#define PRINTNUMS_ALL() do { printf("\n"); PRINTNUMS(num1, num2, num3, num4, num5, num6, BIGINT_FLAG_ADD0X); }while(0)
+#define PRINTNUMS_ALL() do { printf("\n"); PRINTNUMS(num1, num2, num3, num4, num5, num6, BIF_ADD0X | BIF_PRINT_COUNT); }while(0)
 
 void print_bigint(bigint_t num, int flag, char* label) {
     printf("%s: %d %u ", label, num.size, num.capacity);
@@ -59,6 +59,13 @@ int main(int argc, char** argv) {
 
     bigint_from_int(0x11, &num2);
     bigint_div(num3, num2, &num4, &num5);
+
+    PRINTNUMS_ALL();
+
+    bigint_mul(num3, num3, &num4);
+    bigint_mul(num4, num4, &num3);
+    bigint_mul(num3, num3, &num4);
+    bigint_mul(num4, num4, &num3);
 
     PRINTNUMS_ALL();
 

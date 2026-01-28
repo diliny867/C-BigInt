@@ -20,10 +20,12 @@ typedef struct {
 
 extern bigint_t bigint_dummy;
 
-
-#define BIGINT_FLAG_ADD0X           0x1
-#define BIGINT_FLAG_LARGE_LETTERS   0x2
-#define BIGINT_FLAG_PAD_HEX         0x4
+typedef enum {
+    BIF_ADD0X         = 0x1,
+    BIF_LARGE_LETTERS = 0x2,
+    BIF_PAD_HEX       = 0x4,
+    BIF_PRINT_COUNT   = 0x8
+} bigint_flag_e;
 
 
 void bigint_init(bigint_t* num);
