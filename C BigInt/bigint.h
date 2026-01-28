@@ -41,12 +41,12 @@ void bigint_add(const bigint_t num1, const bigint_t num2, bigint_t* out);
 void bigint_sub(const bigint_t num1, const bigint_t num2, bigint_t* out);
 void bigint_mul(const bigint_t num1, const bigint_t num2, bigint_t* out);
 int  bigint_div(const bigint_t num1, const bigint_t num2, bigint_t* out, bigint_t* r);
+
 int  bigint_mod(const bigint_t num1, const bigint_t num2, bigint_t* out);
+int  bigint_sqrt(const bigint_t num, bigint_t* out);
 
 void bigint_copy(const bigint_t num, bigint_t* out);
 
-void bigint_lshift1(const bigint_t num, bigint_t* out);
-void bigint_rshift1(const bigint_t num, bigint_t* out);
 void bigint_lshift(const bigint_t num1, bigint_value_t num2, bigint_t* out);
 void bigint_rshift(const bigint_t num1, bigint_value_t num2, bigint_t* out);
 
@@ -62,6 +62,9 @@ void bigint_and(const bigint_t num1, const bigint_t num2, bigint_t* out);
 void bigint_xor(const bigint_t num1, const bigint_t num2, bigint_t* out);
 void bigint_inv(const bigint_t num, bigint_t* out);
 
+bigint_value_t bigint_bit_length(const bigint_t num);
+void bigint_setbit(bigint_t* out, bigint_value_t index);
+
 void bigint_from_uint(uint64_t num, bigint_t* out);
 void bigint_from_int(int64_t num, bigint_t* out);
 
@@ -73,8 +76,8 @@ bigint_ivalue_t bigint_to_int_greedy(const bigint_t num);
 void bigint_from_string(char* str, bigint_t* out);
 void bigint_from_xstring(char* str, bigint_t* out);
 
-int bigint_to_string(const bigint_t num, char* out, int max_size);
-int bigint_to_xstring(const bigint_t num, char* out, int max_size, int flag);
+bigint_value_t bigint_to_string(const bigint_t num, char* out, int max_size);
+bigint_value_t bigint_to_xstring(const bigint_t num, char* out, int max_size, int flag);
 
-int bigint_print(const bigint_t num, int flag);
-int bigint_print_hex(const bigint_t num, int flag);
+bigint_value_t bigint_print(const bigint_t num, int flag);
+bigint_value_t bigint_print_hex(const bigint_t num, int flag);

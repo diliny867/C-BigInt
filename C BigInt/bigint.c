@@ -6,6 +6,7 @@
 #include <intrin.h>
 #include <stdlib.h>
 #include <string.h>
+#include <math.h>
 
 
 #define BIGINT_DEFAULT_INIT_WORD_COUNT 1
@@ -15,6 +16,10 @@
 
 
 bigint_t bigint_dummy = {0};
+
+static const bigint_t bigint_zero = {0, 0, 0, 0};
+static const bigint_value_t one___ = 1;
+static const bigint_t bigint_one = {&one___, 1, 1, 0};
 
 #define subborrow(borrow, num1, num2, out) _subborrow_u64((borrow), (num1), (num2), (out))
 #define addcarry(carry, num1, num2, out)   _addcarry_u64((carry), (num1), (num2), (out))
@@ -59,16 +64,18 @@ static inline void bigint_zero_data(bigint_value_t* data, bigint_size_t size) {
     //arr_zero(num->data, num->capacity * sizeof(bigint_value_t));
 }
 void bigint_expand(bigint_t* num, bigint_size_t target) {
-    if(num->capacity < target) {
-        num->capacity = calc_capacity(target);
-        num->data = bigint_realloc(num->data, num->capacity * sizeof(bigint_value_t));
-        bigint_zero_data(num->data + num->size, num->capacity - num->size);
+    if(num->size < target) {
+        if(num->capacity < target){
+            num->capacity = calc_capacity(target);
+            num->data = bigint_realloc(num->data, num->capacity * sizeof(bigint_value_t));
+        }
+        bigint_zero_data(num->data + num->size, num->capacity - num->size); // always zero added
     }
 }
 
 static bigint_size_t bigint_shrink_(bigint_value_t* data, bigint_size_t size) {
     // while most significant digits are 0
-    while(size > 1 && !data[size - 1]) {
+    while(size > 0 && !data[size - 1]) {
         size--;
     }
     return size;
@@ -79,10 +86,7 @@ void bigint_shrink(bigint_t* num) {
 
 void bigint_clear(bigint_t* num) {
     //bigint_zero_data(num);
-    if(num->size > 0){
-        num->size = 1;
-        num->data[0] = 0;
-    }
+    num->size = 0;
     num->negative = false;
 }
 void bigint_destroy(bigint_t* num) {
@@ -96,7 +100,7 @@ void bigint_destroy(bigint_t* num) {
 
 void bigint_init_n(bigint_t* num, bigint_size_t n) {
     num->data = bigint_alloc(n * sizeof(bigint_value_t));
-    num->size = 1;
+    num->size = 0;
     num->capacity = calc_capacity(n);
     bigint_zero_data(num->data, num->size);
     num->negative = false;
@@ -172,7 +176,7 @@ static bigint_size_t bigint_rshift_(bigint_value_t* data, bigint_size_t size, bi
         data_out[i]      = data[i + offset] >> shift_val;
     }
 
-    return bigint_shrink_(data_out, size - offset - 1);
+    return bigint_shrink_(data_out, size - offset);
 }
 void bigint_rshift(const bigint_t num1, bigint_value_t num2, bigint_t* out) {
     bigint_size_t offset = (bigint_size_t)num2 >> 6; // / 64
@@ -242,12 +246,12 @@ static bigint_size_t bigint_sub_(bigint_value_t* data1, bigint_size_t size1, big
     if(size_out && !data_out[size_out - 1]) {
         size_out -= 1;
     }
-    return max(size_out, 1);
+    return size_out;
 }
 
 
 void bigint_add(const bigint_t num1, const bigint_t num2, bigint_t* out) {
-    if(!num1.data || !num2.data || !out) { // cant do the thing
+    if(!out) { // cant do the thing
         return;
     }
 
@@ -268,7 +272,7 @@ void bigint_add(const bigint_t num1, const bigint_t num2, bigint_t* out) {
 }
 
 void bigint_sub(const bigint_t num1, const bigint_t num2, bigint_t* out) {
-    if(!num1.data || !num2.data || !out) { // cant do the thing
+    if(!out) { // cant do the thing
         return;
     }
 
@@ -318,11 +322,12 @@ static bigint_size_t bigint_mul_(bigint_value_t* data1, bigint_size_t size1, big
 void bigint_mul(const bigint_t num1, const bigint_t num2, bigint_t* out) {
     assert(num1.data != out->data && num2.data != out->data);
 
-    if(!num1.data || !num2.data || !out) { // cant do the thing
+    if(!out) { // cant do the thing
         return;
     }
 
     bigint_expand(out, num1.size + num2.size);
+
     out->size = bigint_mul_(num1.data, num1.size, num2.data, num2.size, out->data);
 
     out->negative = num1.negative != num2.negative;
@@ -427,7 +432,7 @@ int bigint_div(const bigint_t num1, const bigint_t num2, bigint_t* out, bigint_t
            num1.data != r->data && num2.data != r->data &&
            out->data != r->data);
 
-    if(!num1.data || !num2.data || !out || !r) { // cant do the thing
+    if(!out || !r) { // cant do the thing
         return 2;
     }
 
@@ -437,19 +442,21 @@ int bigint_div(const bigint_t num1, const bigint_t num2, bigint_t* out, bigint_t
     }
 
     int cmp = bigint_cmp(num1, num2);
-    if(cmp <= 0) { // left is less than right
-        bigint_expand(out, 1);
-        out->size = 1;
+    if(cmp < 0) { // left is less than right
+        out->size = 0;
         out->negative = false;
 
-        out->data[0] = cmp == 0; // 1 if 0
+        bigint_copy(num1, r);
 
-        if(cmp == 0) {
-            out->negative = num1.negative != num2.negative;
-            bigint_clear(r);
-        }else {
-            bigint_copy(num1, r);
-        }
+        return 0;
+    }else if(cmp == 0) {
+        bigint_expand(out, 1);
+
+        out->data[0] = 1;
+        out->size = 1;
+        out->negative = num1.negative != num2.negative;
+
+        bigint_clear(r);
 
         return 0;
     }
@@ -478,39 +485,95 @@ int bigint_div(const bigint_t num1, const bigint_t num2, bigint_t* out, bigint_t
 
 
 int bigint_mod(const bigint_t num1, const bigint_t num2, bigint_t* out) { // x - (x / y) * y
-    bigint_expand(out, num2.size);
+    if(!out) { // cant do the thing
+        return 2;
+    }
 
-    //printf(" l: ");
-    //bigint_print_hex(num1, 0);
-    //printf(" ");
-    //bigint_print_hex(num2, 0);
-    //printf("\n");
+    bigint_t tmp;
+    bigint_init_n(&tmp, num1.size + 1);
 
-    if(bigint_lesser(num1, num2)) {
-        bigint_copy(num1, out);
+    int ret = bigint_div(num1, num2, &tmp, out);
+
+    bigint_destroy(&tmp);
+    
+    return ret;
+}
+
+bigint_value_t bigint_bit_length(const bigint_t num) {
+    if(num.size == 0) {
+        return 0;
+    }
+    return num.size * 64llu + 64 - msb_zeros(num.data[num.size - 1]);
+}
+
+void bigint_setbit(bigint_t* out, bigint_value_t index) {
+    bigint_size_t size = (bigint_size_t)(index / 64llu + 1llu);
+    bigint_expand(out, size);
+    out->data[size - 1] |= 1 << (index & 63);
+    out->size = size;
+}
+
+// https://stackoverflow.com/questions/4407839/how-can-i-find-the-square-root-of-a-java-biginteger
+int bigint_sqrt(const bigint_t num, bigint_t* out, bool ceil) {
+    if(!out) { // cant do the thing
+        return 2;
+    }
+
+    int cmp = bigint_cmp(num, bigint_zero);
+    if(cmp < 0) {
+        return 1;
+    }else if(cmp == 0) {
+        out->size = 0;
+        out->negative = false;
         return 0;
     }
 
-    // tmp1 stores division result (possible size is of first number)
-    // tmp2 stores division remained and mult result (possible size is of max of first number and second numbers)
-    bigint_value_t* tmp = bigint_alloc((num1.size + 1 + num1.size + 1 + num2.size) * sizeof(bigint_value_t));
-    arr_zero(tmp, (num1.size + 1 + num1.size + 1 + num2.size) * sizeof(bigint_value_t));
-    bigint_t tmp1, tmp2;
-    bigint_init_from(&tmp1, tmp, num1.size + 1, num1.size + 1);
-    bigint_init_from(&tmp2, tmp + num1.size + 1, num1.size + 1 + num2.size, num1.size + 1 + num2.size);
+    bigint_expand(out, num.size);
 
-    int ret = bigint_div(num1, num2, &tmp1, &bigint_dummy);
-    if(ret){
-        return ret;
+    if(num.size == 1) {
+        out->size = 1;
+        out->data[0] = sqrt(num.data[0]);
+        out->negative = false;
+        return 0;
     }
 
-    bigint_mul(tmp1, num2, &tmp2);
+    int ret = 0;
+    bigint_t tmp1, tmp2, tmp3;
+    bigint_init(&tmp1);
+    bigint_init(&tmp2);
+    bigint_init(&tmp3);
 
-    bigint_sub(num1, tmp2, out);
+    bigint_rshift(num, 1, &tmp1);
 
-    bigint_free(tmp);
+    while(true) {
+        ret = bigint_div(num, tmp1, &tmp2, &tmp3);
+        if(ret) { // how
+            break;
+        }
 
-    return 0;
+        if(!bigint_greater(tmp1, tmp2)) {
+
+            if(ceil){
+                bigint_mul(tmp1, tmp1, &tmp2);
+                if(bigint_lesser(tmp2, num)) {
+                    bigint_add(tmp1, bigint_one, &tmp1);
+                }
+            }
+
+            bigint_copy(tmp1, out);
+            break;
+        }
+
+        bigint_add(tmp2, tmp1, &tmp1);
+        bigint_rshift(tmp1, 1, &tmp1);
+    }
+
+
+    bigint_destroy(&tmp1);
+    bigint_destroy(&tmp2);
+    bigint_destroy(&tmp3);
+
+    return ret;
 }
 
 
@@ -584,7 +647,8 @@ inline int bigint_cmp(const bigint_t num1, const bigint_t num2) {
 }
 
 inline bool bigint_is_zero(const bigint_t num) {
-    return num.size == 0 || (num.size == 1 && num.data[0] == 0);
+    return num.size == 0;
+    // return num.size == 0 || (num.size == 1 && num.data[0] == 0);
 }
 
 #define copy_choose(num1, num2, out, i, max_size)            \
@@ -766,12 +830,13 @@ void bigint_from_xstring(char* str, bigint_t* out) {
     }
 }
 
-int bigint_to_string(const bigint_t num, char* out, int max_size) {
-    if(num.size == 0) {
-        return sprintf_s(out, max_size, "-");
-    }
+bigint_value_t bigint_to_string(const bigint_t num, char* out, int max_size) {
+    bigint_value_t written = 0;
 
-    int written = 0;
+    if(num.size == 0) {
+        written += sprintf_s(out, max_size, "0");
+        return written;
+    }
 
     bigint_value_t ten = 10, num_data = 0, count = 0;
     bigint_t d, bignum, tmp1, tmp2;
@@ -789,8 +854,7 @@ int bigint_to_string(const bigint_t num, char* out, int max_size) {
 
     do {
         bigint_copy(tmp1, &tmp2);
-        bigint_mod(tmp2, d, &bignum);
-        bigint_div(tmp2, d, &tmp1, &bigint_dummy);
+        bigint_div(tmp2, d, &tmp1, &bignum);
 
         written += sprintf_s(out + written, max_size - written, "%llu", bignum.data[0]);
 
@@ -799,11 +863,14 @@ int bigint_to_string(const bigint_t num, char* out, int max_size) {
 
     arr_reverse(char, nums_from, count); // reverse only numbers
 
+    bigint_destroy(&tmp1);
+    bigint_destroy(&tmp2);
+
     return written;
 }
 
-int bigint_to_xstring(const bigint_t num, char* out, int max_size, int flag) {
-    int written = 0;
+bigint_value_t bigint_to_xstring(const bigint_t num, char* out, int max_size, int flag) {
+    bigint_value_t written = 0;
     int large_letters = flag & BIF_LARGE_LETTERS;
     int pad = flag & BIF_PAD_HEX;
     char* format;
@@ -827,17 +894,17 @@ int bigint_to_xstring(const bigint_t num, char* out, int max_size, int flag) {
     return written;
 }
 
-int bigint_print_hex(const bigint_t num, int flag) {
-    int written = 0;
+bigint_value_t bigint_print_hex(const bigint_t num, int flag) {
+    bigint_value_t written = 0;
     int large_letters = flag & BIF_LARGE_LETTERS;
     int pad = flag & BIF_PAD_HEX;
     char* format;
 
     int zeros = num.size == 0 ? 0 : 64 - (int)msb_zeros(num.data[num.size - 1]);
-    bigint_value_t count = (num.size - 1) * 16llu + (zeros == 0 ? 0 : zeros - 1) / 4 + 1;
+    bigint_value_t count = num.size == 0 ? 0 : (num.size - 1) * 16llu + (zeros == 0 ? 0 : zeros - 1) / 4 + 1;
 
     if(flag & BIF_PRINT_COUNT){
-        printf("digits: %llu ", count);
+        written += printf("digits: %llu ", count);
     }
 
     if(num.negative) {
@@ -864,23 +931,29 @@ int bigint_print_hex(const bigint_t num, int flag) {
     return written;
 }
 
-int bigint_print(const bigint_t num, int flag){
+bigint_value_t bigint_print(const bigint_t num, int flag){
+    bigint_value_t written = 0;
+
     if(num.size == 0) {
-        return printf("0");
+        if(flag & BIF_PRINT_COUNT){
+            written += printf("digits: 0 ");
+        }
+        written += printf("0");
+        return written;
     }
 
-    int written = 0, n;
-    bigint_value_t ten = 10, count = 0;
+    bigint_value_t arr[2] = {0}, ten = 10;
+    bigint_value_t count = 0;
     bigint_t d, bignum;
     bigint_t tmp1, tmp2;
     bigint_init_from(&d, &ten, 1, 1);
-    bigint_init_n(&bignum, num.size);
-    bigint_init_n(&tmp1, num.size);
+    bigint_init_from(&bignum, arr, 2, 2);
+    bigint_init_n(&tmp1, num.size + 1);
     bigint_copy(num, &tmp1);
-    bigint_init_n(&tmp2, num.size);
+    bigint_init_n(&tmp2, num.size + 1);
 
     bigint_value_t buf_size = num.size * 20 + 1;
-    char* buf = calloc(buf_size, sizeof(char)); // should be enough
+    char* buf = bigint_alloc(buf_size, sizeof(char)); // should be enough
 
     if(num.negative) {
         written += sprintf_s(buf, buf_size, "-");
@@ -889,8 +962,7 @@ int bigint_print(const bigint_t num, int flag){
 
     do {
         bigint_copy(tmp1, &tmp2);
-        bigint_mod(tmp2, d, &bignum);
-        bigint_div(tmp2, d, &tmp1, &bigint_dummy);
+        bigint_div(tmp2, d, &tmp1, &bignum);
 
         written += sprintf_s(buf + written, buf_size - written, "%u", (uint32_t)bignum.data[0]);
 
@@ -907,7 +979,6 @@ int bigint_print(const bigint_t num, int flag){
 
     bigint_destroy(&tmp1);
     bigint_destroy(&tmp2);
-    bigint_destroy(&bignum);
 
     return written;
 }
