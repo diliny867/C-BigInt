@@ -15,8 +15,6 @@
 #define BIGINT_HALFBASE (1ull << (sizeof(bigint_value_t) * 8 - 2))
 
 
-bigint_t bigint_dummy = {0};
-
 static const bigint_t bigint_zero = {0, 0, 0, 0};
 static const bigint_value_t one___ = 1;
 static const bigint_t bigint_one = {&one___, 1, 1, 0};
@@ -142,9 +140,8 @@ void bigint_copy(const bigint_t num, bigint_t* out) {
     bigint_copy_(num.data, num.size, out->data);
 }
 
-static bigint_size_t bigint_lshift_(bigint_value_t* data, bigint_size_t size, bigint_value_t num, bigint_value_t* data_out) {
-    bigint_size_t offset = (bigint_size_t)num >> 6; // / 64
-    bigint_size_t shift_val = num & 63; // % 64
+static bigint_size_t bigint_lshift_(bigint_value_t* data, bigint_size_t size, bigint_value_t shift, bigint_size_t offset, bigint_value_t* data_out) {
+    bigint_size_t shift_val = shift & 63; // % 64
     bigint_size_t inv_shift_val = 64 - shift_val;
     data_out[size + offset] = 0;
 
@@ -155,15 +152,14 @@ static bigint_size_t bigint_lshift_(bigint_value_t* data, bigint_size_t size, bi
     }
     return bigint_shrink_(data_out, size + offset + 1);
 }
-void bigint_lshift(const bigint_t num1, bigint_value_t num2, bigint_t* out) {
-    bigint_size_t offset = (bigint_size_t)num2 >> 6; // / 64
-    bigint_expand(out, num1.size + 1 + offset);
-    out->size = bigint_lshift_(num1.data, num1.size, num2, out->data);
+void bigint_lshift(const bigint_t num, bigint_value_t shift, bigint_t* out) {
+    bigint_size_t offset = (bigint_size_t)shift >> 6; // / 64
+    bigint_expand(out, num.size + 1 + offset);
+    out->size = bigint_lshift_(num.data, num.size, shift, offset, out->data);
 }
 
-static bigint_size_t bigint_rshift_(bigint_value_t* data, bigint_size_t size, bigint_value_t num, bigint_value_t* data_out) {
-    bigint_size_t offset = (bigint_size_t)num >> 6; // / 64
-    bigint_size_t shift_val = num & 63;
+static bigint_size_t bigint_rshift_(bigint_value_t* data, bigint_size_t size, bigint_value_t shift, bigint_size_t offset, bigint_value_t* data_out) {
+    bigint_size_t shift_val = shift & 63;
     bigint_size_t inv_shift_val = 64 - shift_val;
     if(size <= offset) {
         data_out[0] = 0;
@@ -178,10 +174,10 @@ static bigint_size_t bigint_rshift_(bigint_value_t* data, bigint_size_t size, bi
 
     return bigint_shrink_(data_out, size - offset);
 }
-void bigint_rshift(const bigint_t num1, bigint_value_t num2, bigint_t* out) {
-    bigint_size_t offset = (bigint_size_t)num2 >> 6; // / 64
-    bigint_expand(out, num1.size - offset);
-    out->size = bigint_rshift_(num1.data, num1.size, num2, out->data);
+void bigint_rshift(const bigint_t num, bigint_value_t shift, bigint_t* out) {
+    bigint_size_t offset = (bigint_size_t)shift >> 6; // / 64
+    bigint_expand(out, num.size - offset);
+    out->size = bigint_rshift_(num.data, num.size, shift, offset, out->data);
 }
 
 
@@ -320,11 +316,11 @@ static bigint_size_t bigint_mul_(bigint_value_t* data1, bigint_size_t size1, big
 }
 
 void bigint_mul(const bigint_t num1, const bigint_t num2, bigint_t* out) {
-    assert(num1.data != out->data && num2.data != out->data);
-
     if(!out) { // cant do the thing
         return;
     }
+
+    assert(num1.data != out->data && num2.data != out->data);
 
     bigint_expand(out, num1.size + num2.size);
 
@@ -351,8 +347,10 @@ static void bigint_div_(bigint_value_t* data1, bigint_size_t size1, bigint_value
     bigint_size_t size_tmp, size_a, size_b;
 
     int shift = msb_zeros(b_left); // msb bits
-    size_a = bigint_lshift_(data_a, size1, shift, data_a);
-    size_b = bigint_lshift_(data_b, size2, shift, data_b);
+    assert(shift < 64); // only if b_left is 0, what shouldnt happen
+
+    size_a = bigint_lshift_(data_a, size1, shift, 0, data_a);
+    size_b = bigint_lshift_(data_b, size2, shift, 0, data_b);
     size_tmp = size1 + 1;
 
     b_left = data_b[size_b - 1];
@@ -424,18 +422,18 @@ static void bigint_div_(bigint_value_t* data1, bigint_size_t size1, bigint_value
 
     arr_reverse(bigint_value_t, data_q, *size_q); // reverse
 
-    *size_r = bigint_rshift_(data_r, *size_r, shift, data_r); // reverse initial shift
+    *size_r = bigint_rshift_(data_r, *size_r, shift, 0, data_r); // reverse initial shift
 }
 
 int bigint_div(const bigint_t num1, const bigint_t num2, bigint_t* out, bigint_t* r) {
+    if(!out || !r) { // cant do the thing
+        return 2;
+    }
+
     // these must be different memory
     assert(num1.data != out->data && num2.data != out->data && 
            num1.data != r->data && num2.data != r->data &&
            out->data != r->data);
-
-    if(!out || !r) { // cant do the thing
-        return 2;
-    }
 
     bool right_zero = bigint_is_zero(num2);
     if(right_zero) { // division by 0
@@ -490,6 +488,8 @@ int bigint_mod(const bigint_t num1, const bigint_t num2, bigint_t* out) { // x -
         return 2;
     }
 
+    assert(num1.data != out->data && num2.data != out->data);
+
     bigint_t tmp;
     bigint_init_n(&tmp, num1.size + 1);
 
@@ -520,21 +520,22 @@ int bigint_sqrt(const bigint_t num, bigint_t* out, bool ceil) {
         return 2;
     }
 
+    assert(num.data != out->data);
+
+    out->negative = false;
+
     int cmp = bigint_cmp(num, bigint_zero);
     if(cmp < 0) {
         return 1;
     }else if(cmp == 0) {
         out->size = 0;
-        out->negative = false;
         return 0;
     }
 
     bigint_expand(out, num.size);
 
     if(num.size == 1) {
-        out->size = 1;
-        out->data[0] = sqrt(num.data[0]);
-        out->negative = false;
+        bigint_from_uint(sqrt(num.data[0]), out);
         return 0;
     }
 
@@ -577,6 +578,67 @@ int bigint_sqrt(const bigint_t num, bigint_t* out, bool ceil) {
     return ret;
 }
 
+//https://stackoverflow.com/questions/101439/the-most-efficient-way-to-implement-an-integer-based-power-function-powint-int
+void bigint_pow(const bigint_t num1, const bigint_t num2, BIGINT_UNIQUE_OUT bigint_t* out) {
+    if(!out) {
+        return;
+    }
+
+    assert(num1.data != out->data && num2.data != out->data);
+
+    out->negative = false;
+
+    int cmp = bigint_abscmp(num1, bigint_one);
+    if(cmp < 0) { // zero
+        bigint_from_uint(0, out);
+        return;
+    }else if(cmp == 0) { //one
+        bigint_from_uint(1, out);
+        return;
+    }
+
+    cmp = bigint_abscmp(num2, bigint_one);
+    if(cmp < 0) { // zero
+        bigint_from_uint(1, out);
+        return;
+    }else if(cmp == 0) { // one
+        bigint_copy(num1, out);
+    }
+
+    bigint_expand(out, num1.size * bigint_to_uint_greedy(num2)); // yeah it grows quickly
+
+    out->data[0] = 1;
+
+    bigint_t tmp, base, exp;
+    bigint_init_n(&tmp, out->size);
+    bigint_init_n(&base, out->size);
+    bigint_init_n(&exp, num1.size);
+
+    bigint_copy(num1, &base);
+    base.negative = false;
+
+    while(1) {
+
+        if(exp.data[0] & 1) {
+            bigint_mul(*out, base, &tmp);
+            bigint_copy(tmp, out);
+        }
+
+        bigint_rshift(exp, 1, &exp);
+        if(exp.size == 0) { // zero
+            break;
+        }
+
+        bigint_mul(base, base, &tmp);
+        bigint_copy(tmp, &base);
+    }
+
+    bigint_destroy(&tmp);
+    bigint_destroy(&base);
+    bigint_destroy(&exp);
+
+    bigint_shrink(out);
+}
 
 inline bool bigint_lesser(const bigint_t num1, const bigint_t num2) {
     if(num1.negative != num2.negative) {
@@ -688,8 +750,6 @@ void bigint_xor(const bigint_t num1, const bigint_t num2, bigint_t* out) {
     copy_choose(num1, num2, out, i, max_size);
 }
 
-#undef copy_choose
-
 void bigint_inv(const bigint_t num, bigint_t* out) {
     bigint_expand(out, num.size);
     for(bigint_size_t i = 0; i < num.size; i++) {
@@ -702,24 +762,43 @@ static inline int hexchar_to_int(char c) {
         return c - '0';
     }
     if(c >= 'a' && c <= 'f') {
-        return c - 'a';
+        return c - 'a' + 10;
     }
     if(c >= 'A' && c <= 'F') {
-        return c - 'A';
+        return c - 'A' + 10;
     }
     return 0;
 }
 
 void bigint_from_uint(uint64_t num, bigint_t* out) {
-    bigint_expand(out, 1);
-    out->size = 1;
+    if(!out) {
+        return;
+    }
 
-    out->data[0] = num;
     out->negative = false;
+
+    if(num == 0) {
+        out->size = 0;
+        return;
+    }
+
+    bigint_expand(out, 1);
+
+    out->size = 1;
+    out->data[0] = num;
 
     bigint_shrink(out);
 }
 void bigint_from_int(int64_t num, bigint_t* out) {
+    if(!out) {
+        return;
+    }
+
+    if(num == 0) {
+        out->size = 0;
+        return;
+    }
+
     bigint_expand(out, 1);
     out->size = 1;
 
@@ -734,29 +813,37 @@ void bigint_from_int(int64_t num, bigint_t* out) {
     bigint_shrink(out);
 }
 
-bigint_value_t bigint_to_uint(const bigint_t num) {
+inline bigint_value_t bigint_to_uint(const bigint_t num) {
+    if(num.size == 0) {
+        return 0;
+    }
+
     return num.data[0];
 }
-bigint_ivalue_t bigint_to_int(const bigint_t num) {
-    if(num.negative) {
-        return -((bigint_ivalue_t)num.data[0]);
+inline bigint_ivalue_t bigint_to_int(const bigint_t num) {
+    if(num.size == 0) {
+        return 0;
     }
-    return (bigint_ivalue_t)num.data[0];
+
+    bigint_value_t res = num.data[0];
+    if(num.negative) {
+        return res > INT64_MAX ? INT64_MIN : -((bigint_ivalue_t)res);
+    }
+    return res > INT64_MAX ? INT64_MAX : (bigint_ivalue_t)res;
 }
 
 bigint_value_t bigint_to_uint_greedy(bigint_t num) {
     if(num.size > 1) {
-        return 0xFFFFFFFFFFFFFFFF;
+        return UINT64_MAX;
     }
     return bigint_to_uint(num);
 }
 bigint_ivalue_t bigint_to_int_greedy(bigint_t num) {
     if(num.size > 1) {
         if(num.negative) {
-            return 0xFFFFFFFFFFFFFFFF;
+            return INT64_MIN;
         }
-        // 0x7FFFFFFFFFFFFFFF because that way it is maximal positive integer
-        return 0x7FFFFFFFFFFFFFFF; // 0xFFFFFFFFFFFFFFFF
+        return INT64_MAX; 
     }
     return bigint_to_int(num);
 }
@@ -780,7 +867,7 @@ void bigint_from_string(char* str, bigint_t* out) {
         bigint_from_int(0, out);
         return;
     }
-    dec_len = (dec_len - 1u) / 18u + 1u;
+    dec_len = (dec_len - 1u) / 19u + 1u;
     bigint_expand(out, dec_len);
 
     bigint_value_t ten = 10, num_data = 0;
@@ -803,7 +890,7 @@ void bigint_from_string(char* str, bigint_t* out) {
 }
 
 void bigint_from_xstring(char* str, bigint_t* out) {
-    bigint_size_t i = 0;
+    bigint_size_t index = 0;
     bigint_value_t shift = 0;
     bigint_value_t tmp;
 
@@ -823,11 +910,12 @@ void bigint_from_xstring(char* str, bigint_t* out) {
     }
     bigint_expand(out, (hex_len - 1u) / 16u + 1u);
 
-    while(isxdigit(*str)) {
-        tmp = (bigint_value_t)hexchar_to_int(*(str++)) << shift;
-        out->data[i] += tmp;
+    for(bigint_size_t i = 1; i <= hex_len; i++) {
+        tmp = (bigint_value_t)hexchar_to_int(str[hex_len - i]) << shift;
+        out->data[index] += tmp;
+        out->size = index + 1;
         shift = (shift + 4) % 64;
-        i += shift == 0;
+        index += shift == 0;
     }
 }
 
@@ -839,10 +927,10 @@ bigint_value_t bigint_to_string(const bigint_t num, char* out, int max_size) {
         return written;
     }
 
-    bigint_value_t ten = 10, num_data = 0, count = 0;
+    bigint_value_t arr[2], ten = 10, count = 0;
     bigint_t d, bignum, tmp1, tmp2;
     bigint_init_from(&d, &ten, 1, 1);
-    bigint_init_from(&bignum, &num_data, 1, 1);
+    bigint_init_from(&bignum, arr, 2, 2);
     bigint_init_n(&tmp1, num.size);
     bigint_copy(num, &tmp1);
     bigint_init_n(&tmp2, num.size);
@@ -863,6 +951,9 @@ bigint_value_t bigint_to_string(const bigint_t num, char* out, int max_size) {
     } while(!bigint_is_zero(tmp1));
 
     arr_reverse(char, nums_from, count); // reverse only numbers
+
+    assert(max_size - written > 0);
+    out[written] = '\0';
 
     bigint_destroy(&tmp1);
     bigint_destroy(&tmp2);
@@ -891,6 +982,9 @@ bigint_value_t bigint_to_xstring(const bigint_t num, char* out, int max_size, in
     for(bigint_size_t i = 2; i <= num.size; i++) {
         written += sprintf_s(out + written, max_size - written, format, num.data[num.size - i]);
     }
+
+    assert(max_size - written > 0);
+    out[written] = '\0';
 
     return written;
 }

@@ -16,9 +16,9 @@
 #define PRINTNUMS_ALL() do { printf("\n"); PRINTNUMS(num1, num2, num3, num4, num5, num6, BIF_ADD0X | BIF_PRINT_COUNT); }while(0)
 
 void print_bigint(bigint_t num, int flag, char* label) {
-    printf("%s: %d %u ", label, num.size, num.capacity);
+    printf("%s: %3d %3u  dec: ", label, num.size, num.capacity);
     bigint_print(num, flag);
-    printf(" h: ");
+    printf("  hex: ");
     bigint_print_hex(num, flag);
     printf("\n");
 }
@@ -76,70 +76,22 @@ int main(int argc, char** argv) {
     bigint_mul(num3, num3, &num4);
     bigint_mul(num4, num4, &num3);
 
-    bigint_sqrt(num4, &num6, 0);
+    bigint_sqrt(num4, &num5, 0);
 
     PRINTNUMS_ALL();
 
-    /*
-    bigint_add(num1, num2, &num3);
+    bigint_from_string("207428133789596931991798422905", &num5);
+    bigint_from_xstring("0x29e3c87e076f96884328a1d79", &num4);
 
-    bigint_mul(num3, num2, &num4);
-    PRINTNUMS_ALL();
+    char buf1[256], buf2[256];
+    bigint_to_string(num5, buf1, 256);
+    bigint_to_xstring(num4, buf2, 256, BIF_ADD0X);
 
-    bigint_mul(num4, num4, &num5);
-    bigint_mul(num5, num5, &num4);
     PRINTNUMS_ALL();
-
-    bigint_sub(num2, num5, &num6);
-    PRINTNUMS_ALL();
-
-    //bigint_sub(&num6, &num6, &num6);
-    //PRINTNUMS_ALL();
-
-    bigint_mul(num4, num4, &num1);
-    PRINTNUMS_ALL();
-    bigint_mul(num1, num1, &num4);
-    PRINTNUMS_ALL();
-    bigint_mul(num4, num4, &num1);
-    PRINTNUMS_ALL();
-    bigint_mul(num1, num1, &num4);
-    PRINTNUMS_ALL();
+    printf("num5  s: %s\n", buf1);
+    printf("num4 xs: %s\n", buf2);
 
 
-    bigint_expand(&num2, 4);
-    num2.size = 4;
-    for(uint32_t i = 0; i < num2.size; i++) {
-        num2.data[i] = 0;
-    }
-    num2.data[1] = 1;
-    num2.data[2] = 1;
-    num2.data[num2.size - 1] = 1;
-    bigint_from_int(0x1, &num3);
-    PRINTNUMS_ALL();
-
-    bigint_sub(num2, num3, &num4);
-    PRINTNUMS_ALL();
-
-    bigint_add(num4, num3, &num4);
-    PRINTNUMS_ALL();
-
-    bigint_add(num4, num4, &num4);
-    PRINTNUMS_ALL();
-
-    bigint_sub(num4, num4, &num4);
-    PRINTNUMS_ALL();
-
-    //bigint_mul(&num1, &num1, &num5);
-    //PRINTNUMS_ALL();
-    //bigint_mul(&num5, &num5, &num1);
-    //PRINTNUMS_ALL();
-    //bigint_mul(&num1, &num1, &num5);
-    //PRINTNUMS_ALL();
-    //bigint_mul(&num5, &num5, &num1);
-    //PRINTNUMS_ALL();
-    //bigint_mul(&num1, &num1, &num5);
-    //PRINTNUMS_ALL();
-*/
     bigint_destroy(&num1);
     bigint_destroy(&num2);
     bigint_destroy(&num3);

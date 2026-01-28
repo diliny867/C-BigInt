@@ -6,6 +6,9 @@
 
 #define BIGINT_MAX_WORD_COUNT INT32_MAX
 
+// marks when output cant also be an input
+#define BIGINT_UNIQUE_OUT
+
 typedef uint64_t bigint_value_t;
 typedef int64_t  bigint_ivalue_t;
 
@@ -15,10 +18,9 @@ typedef struct {
     bigint_value_t* data;
     bigint_size_t capacity;
     bigint_size_t size : 31;
-    bool negative : 1;
+    int negative : 1; // if bool, then it doesnt pack in 16 bytes
 } bigint_t;
 
-extern bigint_t bigint_dummy;
 
 typedef enum {
     BIF_ADD0X         = 0x1,
@@ -39,16 +41,17 @@ void bigint_destroy(bigint_t* num);
 
 void bigint_add(const bigint_t num1, const bigint_t num2, bigint_t* out);
 void bigint_sub(const bigint_t num1, const bigint_t num2, bigint_t* out);
-void bigint_mul(const bigint_t num1, const bigint_t num2, bigint_t* out);
-int  bigint_div(const bigint_t num1, const bigint_t num2, bigint_t* out, bigint_t* r);
+void bigint_mul(const bigint_t num1, const bigint_t num2, BIGINT_UNIQUE_OUT bigint_t* out);
+int  bigint_div(const bigint_t num1, const bigint_t num2, BIGINT_UNIQUE_OUT bigint_t* out, BIGINT_UNIQUE_OUT bigint_t* r);
 
-int  bigint_mod(const bigint_t num1, const bigint_t num2, bigint_t* out);
-int  bigint_sqrt(const bigint_t num, bigint_t* out, bool ceil);
+int  bigint_mod(const bigint_t num1, const bigint_t num2, BIGINT_UNIQUE_OUT bigint_t* out);
+int  bigint_sqrt(const bigint_t num, BIGINT_UNIQUE_OUT bigint_t* out, bool ceil);
+void bigint_pow(const bigint_t num, BIGINT_UNIQUE_OUT bigint_t* out);
 
 void bigint_copy(const bigint_t num, bigint_t* out);
 
-void bigint_lshift(const bigint_t num1, bigint_value_t num2, bigint_t* out);
-void bigint_rshift(const bigint_t num1, bigint_value_t num2, bigint_t* out);
+void bigint_lshift(const bigint_t num, bigint_value_t shift, bigint_t* out);
+void bigint_rshift(const bigint_t num, bigint_value_t shift, bigint_t* out);
 
 bool bigint_lesser(const bigint_t num1, const bigint_t num2);
 bool bigint_greater(const bigint_t num1, const bigint_t num2);
