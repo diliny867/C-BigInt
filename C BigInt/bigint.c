@@ -51,11 +51,15 @@ static const bigint_t bigint_one = {&one___, 1, 1, 0};
         }                                        \
     } while(0)
 
+
+#ifdef BIGINT_POW2_GROW
 // no need for  (size) > 0x80000000 ? 0xFFFFFFFF : (1u << (32u - _lzcnt_u32((size) - 1)))
 // because _lzcnt_u32 cant return 0 because size is 31 bit, so atleast 1
-//#define calc_capacity(size) (1u << (32u - _lzcnt_u32((size) - 1)))
+# define calc_capacity(size) (1u << (32u - _lzcnt_u32((size) - 1)))
+#else
+# define calc_capacity(size) (size)
+#endif
 
-#define calc_capacity(size) (size)
 
 static inline void bigint_zero_data(bigint_value_t* data, bigint_size_t size) {
     arr_zero(data, size * sizeof(bigint_value_t));
@@ -323,7 +327,7 @@ static bigint_size_t bigint_mul_(bigint_value_t* data1, bigint_size_t size1, big
     return size + 1;
 }
 
-void bigint_mul(const bigint_t num1, const bigint_t num2, bigint_t* out) {
+void bigint_mul(const bigint_t num1, const bigint_t num2, bigint_t* UNIQUE(out)) {
     if(!out) { // cant do the thing
         return;
     }
@@ -448,7 +452,7 @@ static void bigint_div_(bigint_value_t* data1, bigint_size_t size1, bigint_value
     *size_r = bigint_rshift_(data_r, *size_r, shift, 0, data_r); // reverse initial shift
 }
 
-int bigint_div(const bigint_t num1, const bigint_t num2, bigint_t* out, bigint_t* r) {
+int bigint_div(const bigint_t num1, const bigint_t num2, bigint_t* UNIQUE(out), bigint_t* UNIQUE(r)) {
     if(!out || !r) { // cant do the thing
         return 2;
     }
@@ -533,7 +537,7 @@ int bigint_div(const bigint_t num1, const bigint_t num2, bigint_t* out, bigint_t
 }
 
 
-int bigint_mod(const bigint_t num1, const bigint_t num2, bigint_t* out) { // x - (x / y) * y
+int bigint_mod(const bigint_t num1, const bigint_t num2, bigint_t* UNIQUE(out)) { // x - (x / y) * y
     if(!out) { // cant do the thing
         return 2;
     }
@@ -566,22 +570,8 @@ int bigint_mod(const bigint_t num1, const bigint_t num2, bigint_t* out) { // x -
     return ret;
 }
 
-bigint_value_t bigint_bit_length(const bigint_t num) {
-    if(num.size == 0) {
-        return 0;
-    }
-    return num.size * 64llu + 64 - msb_zeros(num.data[num.size - 1]);
-}
-
-void bigint_setbit(bigint_t* out, bigint_value_t index) {
-    bigint_size_t size = (bigint_size_t)(index / 64llu + 1llu);
-    bigint_expand(out, size);
-    out->data[size - 1] |= 1 << (index & 63);
-    out->size = size;
-}
-
 // https://stackoverflow.com/questions/4407839/how-can-i-find-the-square-root-of-a-java-biginteger
-int bigint_sqrt(const bigint_t num, bigint_t* out, bool ceil) {
+int bigint_sqrt(const bigint_t num, bigint_t* UNIQUE(out), bool ceil) {
     if(!out) { // cant do the thing
         return 2;
     }
@@ -663,7 +653,7 @@ int bigint_sqrt(const bigint_t num, bigint_t* out, bool ceil) {
 }
 
 //https://stackoverflow.com/questions/101439/the-most-efficient-way-to-implement-an-integer-based-power-function-powint-int
-void bigint_pow(const bigint_t num1, const bigint_t num2, bigint_t* out) {
+void bigint_pow(const bigint_t num1, const bigint_t num2, bigint_t* UNIQUE(out)) {
     if(!out) {
         return;
     }
@@ -738,6 +728,94 @@ void bigint_pow(const bigint_t num1, const bigint_t num2, bigint_t* out) {
 #endif
 
     bigint_shrink(out);
+}
+
+
+bigint_value_t bigint_bit_length(const bigint_t num) {
+    if(num.size == 0) {
+        return 0;
+    }
+    return num.size * 64llu + 64 - msb_zeros(num.data[num.size - 1]);
+}
+
+void bigint_setbit(bigint_t* out, bigint_value_t index) {
+    bigint_size_t size = (bigint_size_t)(index / 64llu + 1llu);
+    bigint_expand(out, size);
+    out->data[size - 1] |= 1 << (index & 63);
+    out->size = size;
+}
+
+void bigint_log2(const bigint_t num, bigint_t* out) {
+    if(!out) {
+        return;
+    }
+
+    out->negative = false;
+
+    bigint_value_t val = bigint_bit_length(num);
+    if(val == 0) {
+        out->size = 0;
+        return;
+    }
+
+    bigint_expand(out, 1);
+    out->data[0] = val;
+    out->size = 1;
+}
+
+int bigint_gcd(const bigint_t num1, const bigint_t num2, bigint_t* UNIQUE(out)) {
+    if(!out) {
+        return 2;
+    }
+
+#ifndef BIGINT_NO_UNIQUE
+    assert(num1.data != out->data && num2.data != out->data);
+#endif
+
+    if(num1.size == 0 || num2.size == 0) {
+        return 1;
+    }
+
+#ifdef BIGINT_NO_UNIQUE
+    bigint_t* bigint_old_out__ = out;
+    bigint_t bigint_tmp__ = { 0, 0, 0, 0 };
+    out = &bigint_tmp__;
+
+    bigint_init(out);
+#endif
+
+    bigint_t dummy, tmp1, tmp2;
+    bigint_init_n(&dummy, num1.size + 1);
+    bigint_init_n(&tmp1, num1.size + 1);
+    bigint_init_n(&tmp2, num2.size + 1);
+    bigint_copy(num1, &tmp1);
+    bigint_copy(num2, &tmp2);
+    tmp1.negative = false;
+    tmp2.negative = false;
+
+    int ret = 0;
+
+    while (!bigint_is_zero(tmp2)){
+        bigint_copy(tmp2, out);
+        ret = bigint_div(tmp1, *out, &dummy, &tmp2);
+        if(ret) {
+            break;
+        }
+
+        bigint_copy(*out, &tmp1);
+    }
+
+#ifdef BIGINT_NO_UNIQUE
+    bigint_copy(*out, bigint_old_out__);
+    bigint_destroy(out);
+    out = bigint_old_out__;
+#endif
+
+    out->negative = false;
+
+    bigint_shrink(out);
+
+    return ret;
 }
 
 inline bool bigint_lesser(const bigint_t num1, const bigint_t num2) {

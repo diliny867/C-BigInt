@@ -91,11 +91,15 @@ int main(int argc, char** argv) {
     printf("num5  s: %s\n", buf1);
     printf("num4 xs: %s\n", buf2);
 
-    //bigint_from_int(0xff, &num2);
+
+    bigint_from_int(27, &num1);
+    bigint_from_int(360, &num2);
+
+    bigint_gcd(num1, num2, &num6);
 
     //bigint_pow(num4, num2, &num5);
 
-    //PRINTNUMS_ALL();
+    PRINTNUMS_ALL();
 
 
     bigint_destroy(&num1);

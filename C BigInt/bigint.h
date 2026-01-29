@@ -51,6 +51,8 @@ int  bigint_div(const bigint_t num1, const bigint_t num2, bigint_t* UNIQUE(out),
 int  bigint_mod(const bigint_t num1, const bigint_t num2, bigint_t* UNIQUE(out));
 int  bigint_sqrt(const bigint_t num, bigint_t* UNIQUE(out), bool ceil);
 void bigint_pow(const bigint_t num1, const bigint_t num2, bigint_t* UNIQUE(out));
+void bigint_log2(const bigint_t num, bigint_t* out); // out is always in uint64, maybe output as it and not as bigint
+int bigint_gcd(const bigint_t num1, const bigint_t num2, bigint_t* UNIQUE(out));
 
 void bigint_copy(const bigint_t num, bigint_t* out);
 
