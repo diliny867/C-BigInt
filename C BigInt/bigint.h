@@ -6,8 +6,11 @@
 
 #define BIGINT_MAX_WORD_COUNT INT32_MAX
 
-// marks when output cant also be an input
-#define BIGINT_UNIQUE_OUT
+// marks when variable must be unique in terms of other inputs/outputs
+#define UNIQUE(var) var
+
+// functions dont reuse output for calculations, with it BIGINT_UNIQUE_OUT dont matter
+// #define BIGINT_NO_UNIQUE
 
 typedef uint64_t bigint_value_t;
 typedef int64_t  bigint_ivalue_t;
@@ -41,12 +44,13 @@ void bigint_destroy(bigint_t* num);
 
 void bigint_add(const bigint_t num1, const bigint_t num2, bigint_t* out);
 void bigint_sub(const bigint_t num1, const bigint_t num2, bigint_t* out);
-void bigint_mul(const bigint_t num1, const bigint_t num2, BIGINT_UNIQUE_OUT bigint_t* out);
-int  bigint_div(const bigint_t num1, const bigint_t num2, BIGINT_UNIQUE_OUT bigint_t* out, BIGINT_UNIQUE_OUT bigint_t* r);
 
-int  bigint_mod(const bigint_t num1, const bigint_t num2, BIGINT_UNIQUE_OUT bigint_t* out);
-int  bigint_sqrt(const bigint_t num, BIGINT_UNIQUE_OUT bigint_t* out, bool ceil);
-void bigint_pow(const bigint_t num, BIGINT_UNIQUE_OUT bigint_t* out);
+void bigint_mul(const bigint_t num1, const bigint_t num2, bigint_t* UNIQUE(out));
+int  bigint_div(const bigint_t num1, const bigint_t num2, bigint_t* UNIQUE(out), bigint_t* UNIQUE(r));
+
+int  bigint_mod(const bigint_t num1, const bigint_t num2, bigint_t* UNIQUE(out));
+int  bigint_sqrt(const bigint_t num, bigint_t* UNIQUE(out), bool ceil);
+void bigint_pow(const bigint_t num1, const bigint_t num2, bigint_t* UNIQUE(out));
 
 void bigint_copy(const bigint_t num, bigint_t* out);
 

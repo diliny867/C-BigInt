@@ -44,7 +44,7 @@ int main(int argc, char** argv) {
 
     PRINTNUMS_ALL();
 
-    bigint_from_int(0x135, &num3);
+    bigint_from_int(-0x135, &num3);
 
     PRINTNUMS_ALL();
 
@@ -80,8 +80,8 @@ int main(int argc, char** argv) {
 
     PRINTNUMS_ALL();
 
-    bigint_from_string("207428133789596931991798422905", &num5);
-    bigint_from_xstring("0x29e3c87e076f96884328a1d79", &num4);
+    bigint_from_string("-207428133789596931991798422905", &num5);
+    bigint_from_xstring("-0x29e3c87e076f96884328a1d79", &num4);
 
     char buf1[256], buf2[256];
     bigint_to_string(num5, buf1, 256);
@@ -90,6 +90,12 @@ int main(int argc, char** argv) {
     PRINTNUMS_ALL();
     printf("num5  s: %s\n", buf1);
     printf("num4 xs: %s\n", buf2);
+
+    //bigint_from_int(0xff, &num2);
+
+    //bigint_pow(num4, num2, &num5);
+
+    //PRINTNUMS_ALL();
 
 
     bigint_destroy(&num1);
