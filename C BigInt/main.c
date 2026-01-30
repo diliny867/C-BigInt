@@ -13,7 +13,7 @@
         print_bigint(num6, FLAG, #num6);                       \
     } while(0)
 
-#define PRINTNUMS_ALL() do { printf("\n"); PRINTNUMS(num1, num2, num3, num4, num5, num6, BIF_ADD0X | BIF_PRINT_COUNT); }while(0)
+#define PRINTNUMS_ALL() do { printf("\n"); PRINTNUMS(num1, num2, num3, num4, num5, num6, BI_ADD0X | BI_PRINT_COUNT); }while(0)
 
 void print_bigint(bigint_t num, int flag, char* label) {
     printf("%s: %3d %3u  dec: ", label, num.size, num.capacity);
@@ -23,7 +23,7 @@ void print_bigint(bigint_t num, int flag, char* label) {
     printf("\n");
 }
 
-int main(int argc, char** argv) {
+void test_bigints() {
     bigint_t num1, num2, num3, num4, num5, num6;
     bigint_init(&num1);
     bigint_init(&num2);
@@ -85,7 +85,7 @@ int main(int argc, char** argv) {
 
     char buf1[256], buf2[256];
     bigint_to_string(num5, buf1, 256);
-    bigint_to_xstring(num4, buf2, 256, BIF_ADD0X);
+    bigint_to_xstring(num4, buf2, 256, BI_ADD0X);
 
     PRINTNUMS_ALL();
     printf("num5  s: %s\n", buf1);
@@ -108,6 +108,54 @@ int main(int argc, char** argv) {
     bigint_destroy(&num4);
     bigint_destroy(&num5);
     bigint_destroy(&num6);
+}
+
+
+void test_bigint_fractions() {
+    bigintf_t num1,num2, num3;
+    bigintf_init(&num1);
+    bigintf_init(&num2);
+    bigintf_init(&num3);
+
+    bigintf_from_uint(179865, 67, &num1);
+    bigintf_from_uint(52, 6, &num2);
+
+    bigintf_print(num1, 0, 0);
+    printf("\n");
+    bigintf_print(num2, 0, 0);
+    printf("\n");
+
+    bigintf_mul(num1, num2, &num3);
+
+    bigintf_print(num3, 0, 0);
+    printf("\n");
+    bigintf_print(num3, 200, BIF_AS_DECIMAL);
+    printf("\n");
+    printf("\n");
+
+    ///bigint_from_uint(1, &num3.denominator);
+
+    bigintf_mul(num3, num3, &num2);
+    bigintf_mul(num2, num2, &num3);
+
+    bigintf_mul(num3, num3, &num2);
+    bigintf_mul(num2, num2, &num3);
+
+    bigintf_mul(num3, num3, &num2);
+    bigintf_mul(num2, num2, &num3);
+
+    bigintf_print(num3, 0, 0);
+    printf("\n");
+    bigintf_print(num3, 200, BIF_AS_DECIMAL);
+    printf("\n");
+}
+
+int main(int argc, char** argv) {
+
+    //test_bigints();
+
+    test_bigint_fractions();
+
 
     return 0;
 }

@@ -26,11 +26,39 @@ typedef struct {
 
 
 typedef enum {
-    BIF_ADD0X         = 0x1,
-    BIF_LARGE_LETTERS = 0x2,
-    BIF_PAD_HEX       = 0x4,
-    BIF_PRINT_COUNT   = 0x8
+    BI_ADD0X         = 1 << 0,
+    BI_LARGE_LETTERS = 1 << 1,
+    BI_PAD_HEX       = 1 << 2,
+    BI_PRINT_COUNT   = 1 << 3,
+    BI_BIF_START     = 1 << 4
 } bigint_flag_e;
+
+
+#ifndef BIGINT_NO_FRACTIONS
+
+typedef struct {
+    bigint_t numerator;
+    bigint_t denominator;
+} bigintf_t;
+
+typedef enum {
+    BIF_AS_DECIMAL = BI_BIF_START,
+} bigintf_flag_e;
+
+#endif
+
+
+#ifndef bigint_alloc
+# define bigint_alloc(size) malloc((size))
+#endif
+
+#ifndef bigint_realloc
+# define bigint_realloc(ptr, size) realloc((ptr), (size))
+#endif
+
+#ifndef bigint_free
+# define bigint_free(ptr) free((ptr))
+#endif
 
 
 void bigint_init(bigint_t* num);
@@ -64,7 +92,11 @@ bool bigint_greater(const bigint_t num1, const bigint_t num2);
 bool bigint_eq(const bigint_t num1, const bigint_t num2);
 int bigint_abscmp(const bigint_t num1, const bigint_t num2);
 int bigint_cmp(const bigint_t num1, const bigint_t num2);
-bool bigint_is_zero(const bigint_t num);
+//bool bigint_is_zero(const bigint_t num);
+#define bigint_is_zero(num) (num.size == 0)
+
+bool bigint_eq_uint(const bigint_t num1, bigint_value_t num2);
+bool bigint_abscmp_uint(const bigint_t num1, bigint_value_t num2);
 
 void bigint_or(const bigint_t num1, const bigint_t num2, bigint_t* out);
 void bigint_and(const bigint_t num1, const bigint_t num2, bigint_t* out);
@@ -90,3 +122,37 @@ bigint_value_t bigint_to_xstring(const bigint_t num, char* out, int max_size, in
 
 bigint_value_t bigint_print(const bigint_t num, int flag);
 bigint_value_t bigint_print_hex(const bigint_t num, int flag);
+
+
+
+#ifndef BIGINT_NO_FRACTIONS
+
+void bigintf_init(bigintf_t* num);
+void bigintf_clear(bigintf_t* num);
+void bigintf_destroy(bigintf_t* num);
+
+void bigintf_copy(bigintf_t* num, bigintf_t* out);
+
+void bigintf_simplify(bigintf_t* num);
+
+bool bigintf_is_zero(bigintf_t* num);
+
+int bigintf_abscmp(const bigintf_t num1, const bigintf_t num2);
+int bigintf_cmp(const bigintf_t num1, const bigintf_t num2);
+bool bigintf_abseq(const bigintf_t num1, const bigintf_t num2);
+
+void bigintf_add(const bigintf_t num1, const bigintf_t num2, bigintf_t* UNIQUE(out));
+void bigintf_sub(const bigintf_t num1, const bigintf_t num2, bigintf_t* UNIQUE(out));
+
+void bigintf_mul(const bigintf_t num1, const bigintf_t num2, bigintf_t* UNIQUE(out));
+int  bigintf_div(const bigintf_t num1, const bigintf_t num2, bigintf_t* UNIQUE(out));
+
+void bigintf_from_bigint(bigint_t num, bigintf_t* out);
+void bigintf_from_bigints(bigint_t num, bigint_t den, bigintf_t* out);
+
+void bigintf_from_uint(uint64_t num, uint64_t den, bigintf_t* out);
+void bigintf_from_int(uint64_t num, uint64_t den,bigintf_t* out);
+
+bigint_value_t bigintf_print(const bigintf_t num, bigint_value_t fraction_max, int flag);
+
+#endif
