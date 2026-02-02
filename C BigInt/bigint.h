@@ -103,7 +103,7 @@ void bigint_and(const bigint_t num1, const bigint_t num2, bigint_t* out);
 void bigint_xor(const bigint_t num1, const bigint_t num2, bigint_t* out);
 void bigint_inv(const bigint_t num, bigint_t* out);
 
-bool bigint_fits_int(const bigint_t num, bool signed_);
+bool bigint_fits_int(const bigint_t num, bool is_signed);
 
 bigint_value_t bigint_bit_length(const bigint_t num);
 void bigint_setbit(bigint_t* out, bigint_value_t index);

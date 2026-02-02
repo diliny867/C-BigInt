@@ -625,10 +625,12 @@ int bigint_sqrt(const bigint_t num, bigint_t* UNIQUE(out), bool ceil) {
     }
 
     int ret = 0;
+    bigint_size_t size = num.size + 1;
+    bigint_value_t* tmp_alloc = bigint_alloc((size * 3) * sizeof(bigint_value_t));
     bigint_t tmp1, tmp2, tmp3;
-    bigint_init(&tmp1);
-    bigint_init(&tmp2);
-    bigint_init(&tmp3);
+    bigint_init_from(&tmp1, tmp_alloc                                , 0, size);
+    bigint_init_from(&tmp2, tmp_alloc + tmp1.capacity                , 0, size);
+    bigint_init_from(&tmp3, tmp_alloc + tmp1.capacity + tmp2.capacity, 0, size);
 
     bigint_rshift(num, 1, &tmp1);
 
@@ -656,9 +658,7 @@ int bigint_sqrt(const bigint_t num, bigint_t* UNIQUE(out), bool ceil) {
     }
 
 
-    bigint_destroy(&tmp1);
-    bigint_destroy(&tmp2);
-    bigint_destroy(&tmp3);
+    bigint_free(tmp_alloc);
 
 #ifdef BIGINT_NO_UNIQUE
     bigint_copy(*out, bigint_old_out__);
@@ -981,12 +981,12 @@ void bigint_inv(const bigint_t num, bigint_t* out) {
     }
 }
 
-bool bigint_fits_int(const bigint_t num, bool signed_) {
+bool bigint_fits_int(const bigint_t num, bool is_signed) {
     if(num.size > 1) {
         return false;
     }
 
-    if(signed_) {
+    if(is_signed) {
         return num.data[0] <= (bigint_value_t)INTMAX_MAX + (bigint_value_t)!!num.negative;
     }
 
@@ -1410,18 +1410,25 @@ void bigintf_simplify(bigintf_t* num){
         return;
     }
 
+    int negative = num->numerator.negative;
+    num->numerator.negative = false;
+
     if(bigint_eq(num->numerator, num->denominator)){
         bigint_from_uint(1, &num->numerator);
         bigint_from_uint(1, &num->denominator);
+
+        num->numerator.negative = negative;
+
+        return;
     }
 
+    bigint_size_t size_max = max(num->numerator.size, num->denominator.size) + 1;
+    bigint_size_t size_min = min(num->numerator.size, num->denominator.size) + 1;
     bigint_t gcd, r, tmp;
-    bigint_value_t* tmp_alloc = bigint_alloc((min(num->numerator.size, num->denominator.size) + 1 
-                                             + max(num->numerator.size, num->denominator.size) + 1 
-                                             + max(num->numerator.size, num->denominator.size) + 1) * sizeof(bigint_value_t));
-    bigint_init_from(&gcd, tmp_alloc,                             0, min(num->numerator.size, num->denominator.size) + 1);
-    bigint_init_from(&r,   tmp_alloc + gcd.capacity,              0, max(num->numerator.size, num->denominator.size) + 1);
-    bigint_init_from(&tmp, tmp_alloc + gcd.capacity + r.capacity, 0, max(num->numerator.size, num->denominator.size) + 1);
+    bigint_value_t* tmp_alloc = bigint_alloc((size_min + size_max + size_max) * sizeof(bigint_value_t));
+    bigint_init_from(&gcd, tmp_alloc,                             0, size_min);
+    bigint_init_from(&r,   tmp_alloc + gcd.capacity,              0, size_max);
+    bigint_init_from(&tmp, tmp_alloc + gcd.capacity + r.capacity, 0, size_max);
 
     bigint_gcd(num->numerator, num->denominator, &gcd);
 
@@ -1432,6 +1439,8 @@ void bigintf_simplify(bigintf_t* num){
         bigint_copy(num->denominator, &tmp);
         bigint_div(tmp, gcd, &num->denominator, &r);
     }
+
+    num->numerator.negative = negative;
 
     bigint_free(tmp_alloc);
 }
@@ -1598,6 +1607,8 @@ void bigintf_from_f64(double num, bigintf_t* out) {
     //bigint_from_string(buf_exp10, &out->denominator);
     bigint_from_uint(int_pow10(decimal), &out->denominator);
 
+    out->numerator.negative = negative;
+
     bigintf_simplify(out);
 }
 
@@ -1623,10 +1634,12 @@ bigint_value_t bigintf_to_string(const bigintf_t num, char* out, bigint_value_t 
         return written;
     }
 
+    bigint_size_t size = max(num.numerator.size + 1, num.denominator.size) + 1;
+    bigint_value_t* tmp_alloc = bigint_alloc((size * 3) * sizeof(bigint_value_t));
     bigint_t q, r, nr;
-    bigint_init(&q);
-    bigint_init(&r);
-    bigint_init(&nr);
+    bigint_init_from(&q,  tmp_alloc                          , 0, size);
+    bigint_init_from(&r,  tmp_alloc + q.capacity             , 0, size);
+    bigint_init_from(&nr, tmp_alloc + q.capacity + r.capacity, 0, size);
 
     bigint_copy(num.numerator, &nr);
     nr.negative = false;
@@ -1640,6 +1653,8 @@ bigint_value_t bigintf_to_string(const bigintf_t num, char* out, bigint_value_t 
     written += bigint_to_string(q, out + written, max_size - written);
 
     if(bigint_is_zero(r)){
+        bigint_free(tmp_alloc);
+
         return written;
     }
 
@@ -1673,9 +1688,11 @@ bigint_value_t bigintf_to_string(const bigintf_t num, char* out, bigint_value_t 
 
     out[written] = '\0';
 
-    bigint_destroy(&q);
-    bigint_destroy(&r);
-    bigint_destroy(&nr);
+    //bigint_destroy(&q);
+    //bigint_destroy(&r);
+    //bigint_destroy(&nr);
+
+    bigint_free(tmp_alloc);
 
     return written;
 }
@@ -1690,10 +1707,12 @@ bigint_value_t bigintf_print(const bigintf_t num, bigint_value_t fraction_max, i
         return written;
     }
 
+    bigint_size_t size = max(num.numerator.size + 1, num.denominator.size) + 1;
+    bigint_value_t* tmp_alloc = bigint_alloc((size * 3) * sizeof(bigint_value_t));
     bigint_t q, r, nr;
-    bigint_init(&q);
-    bigint_init(&r);
-    bigint_init(&nr);
+    bigint_init_from(&q,  tmp_alloc                          , 0, size);
+    bigint_init_from(&r,  tmp_alloc + q.capacity             , 0, size);
+    bigint_init_from(&nr, tmp_alloc + q.capacity + r.capacity, 0, size);
 
     bigint_copy(num.numerator, &nr);
     nr.negative = false;
@@ -1707,6 +1726,8 @@ bigint_value_t bigintf_print(const bigintf_t num, bigint_value_t fraction_max, i
     written += bigint_print(q, 0);
 
     if(bigint_is_zero(r)){
+        bigint_free(tmp_alloc);
+
         return written;
     }
 
@@ -1739,9 +1760,7 @@ bigint_value_t bigintf_print(const bigintf_t num, bigint_value_t fraction_max, i
         bigint_copy(r, &nr);
     }
 
-    bigint_destroy(&q);
-    bigint_destroy(&r);
-    bigint_destroy(&nr);
+    bigint_free(tmp_alloc);
 
     return written;
 }

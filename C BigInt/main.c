@@ -199,7 +199,7 @@ void test_bigint_fractions() {
     printf("\n");
     printf("\n");
 
-    bigintf_from_f64(123425789346578.235, &num3);
+    bigintf_from_f64(-123425789346578.235, &num3);
 
     printf("printed:   ");
     bigintf_print(num3, 200, BIF_AS_DECIMAL);
