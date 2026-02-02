@@ -310,7 +310,6 @@ static bigint_size_t bigint_mul_(bigint_value_t* data1, bigint_size_t size1, big
 
     bigint_value_t high, low;
     bigint_size_t k;
-    bigint_size_t size = 0;
     uint8_t carry;
     for(bigint_size_t j = 0; j < size2; j++) {
         for(bigint_size_t i = 0; i < size1; i++) {
@@ -324,10 +323,9 @@ static bigint_size_t bigint_mul_(bigint_value_t* data1, bigint_size_t size1, big
                     carry = ((data_out[++k] += 1) == 0);
                 }
             }
-            size = max(size, k);
         }
     }
-    return size + 1;
+    return size1 + size2; 
 }
 
 void bigint_mul(const bigint_t num1, const bigint_t num2, bigint_t* UNIQUE(out)) {
@@ -983,6 +981,18 @@ void bigint_inv(const bigint_t num, bigint_t* out) {
     }
 }
 
+bool bigint_fits_int(const bigint_t num, bool signed_) {
+    if(num.size > 1) {
+        return false;
+    }
+
+    if(signed_) {
+        return num.data[0] <= (bigint_value_t)INTMAX_MAX + (bigint_value_t)!!num.negative;
+    }
+
+    return true;
+}
+
 static inline int hexchar_to_int(char c) {
     if(c >= '0' && c <= '9') {
         return c - '0';
@@ -1102,13 +1112,11 @@ void bigint_from_string(char* str, bigint_t* out) {
     bigint_init_from(&d, &ten, 1, 1);
     bigint_init_from(&bignum, &num_data, 1, 1);
     bigint_init_n(&tmp, dec_len);
-    bigint_size_t tens_count = 0;
 
     while(isdigit(*str)) {
         bignum.data[0] = (bigint_value_t)*(str++) - '0';
         bigint_mul(tmp, d, out);
         bigint_add(*out, bignum, &tmp);
-        tens_count++;
     }
 
     tmp.negative = neg;
@@ -1152,9 +1160,9 @@ bigint_value_t div_r(bigint_value_t v, bigint_value_t d, bigint_value_t* r) {
     *r = v - q * d;
     return q;
 }
-bigint_value_t reverse_int_buf(bigint_size_t val, int min_cnt, char* buf) {
+bigint_value_t reverse_int_buf(bigint_value_t val, int min_cnt, char* buf, int max_size) {
     bigint_value_t r, size = 0;
-    while(true) { // reverse 'print' integer
+    while(max_size--) { // reverse 'print' integer
         val = div_r(val, 10, &r);
 
         buf[size++] = (char)r + '0';
@@ -1169,12 +1177,16 @@ bigint_value_t reverse_int_buf(bigint_size_t val, int min_cnt, char* buf) {
 bigint_value_t bigint_to_string(const bigint_t num, char* out, int max_size) {
     bigint_value_t written = 0;
 
+    if(!out || max_size <= 0) {
+        return 0;
+    }
+
     if(num.size == 0) {
-        written += sprintf_s(out, max_size, "0");
+        written += sprintf_s(out, max_size - written, "0");
         return written;
     }
 
-    bigint_value_t val, r, divisor = 1000000000000000000llu;
+    bigint_value_t val, divisor = 1000000000000000000llu;
     bigint_t d, bignum, tmp1, tmp2;
     bigint_init_from(&d, &divisor, 1, 1);
     bigint_value_t* tmp_alloc = bigint_alloc((num.size + 1 + num.size + 1 + num.size + 1) * sizeof(bigint_value_t));
@@ -1185,7 +1197,7 @@ bigint_value_t bigint_to_string(const bigint_t num, char* out, int max_size) {
     tmp1.negative = false;
 
     if(num.negative) {
-        written += sprintf_s(out, max_size, "-");
+        written += sprintf_s(out, max_size - written, "-");
     }
 
     int cnt;
@@ -1194,28 +1206,16 @@ bigint_value_t bigint_to_string(const bigint_t num, char* out, int max_size) {
         bigint_copy(tmp1, &tmp2);
         bigint_div(tmp2, d, &tmp1, &bignum);
 
-        cnt = (tmp1.size > 1) * 18; // to print all digits if remainder less than necessary digits count
+        cnt = (tmp1.size > 0) * 18; // to print all digits if remainder less than necessary digits count
 
-        written += reverse_int_buf(bignum.data[0], cnt, out + written);
-
-        //val = bignum.data[0];
-        //while(true) { // reverse 'print' integer
-        //    val = div_r(val, 10, &r);
-        //
-        //    out[written++] = (char)r + '0';
-        //
-        //    if(--cnt <= 0 && val <= 0) {
-        //        break;
-        //    }
-        //}
-
-        //written += sprintf_s(out + written, max_size - written, "%u", (uint32_t)bignum.data[0]);
+        val = bignum.size == 0 ? 0 : bignum.data[0];
+        written += reverse_int_buf(val, cnt, out + written, max_size - written);
     } while(!bigint_is_zero(tmp1));
 
     bigint_value_t count = written - !!num.negative;
     arr_reverse(char, out + !!num.negative, count); // reverse only numbers
 
-    assert(max_size - written > 0);
+    //assert(max_size - written > 0);
     out[written] = '\0';
 
     bigint_free(tmp_alloc);
@@ -1245,7 +1245,7 @@ bigint_value_t bigint_to_xstring(const bigint_t num, char* out, int max_size, in
         written += sprintf_s(out + written, max_size - written, format, num.data[num.size - i]);
     }
 
-    assert(max_size - written > 0);
+    //assert(max_size - written > 0);
     out[written] = '\0';
 
     return written;
@@ -1257,10 +1257,9 @@ bigint_value_t bigint_print_hex(const bigint_t num, int flag) {
     int pad = flag & BI_PAD_HEX;
     char* format;
 
-    int zeros = num.size == 0 ? 0 : 64 - (int)msb_zeros(num.data[num.size - 1]);
-    bigint_value_t count = num.size == 0 ? 0 : (num.size - 1) * 16llu + (zeros == 0 ? 0 : zeros - 1) / 4 + 1;
-
     if(flag & BI_PRINT_COUNT){
+        int zeros = num.size == 0 ? 0 : 64 - (int)msb_zeros(num.data[num.size - 1]);
+        bigint_value_t count = num.size == 0 ? 0 : (num.size - 1) * 16llu + (zeros == 0 ? 0 : zeros - 1) / 4 + 1;
         written += printf("digits: %llu ", count);
     }
 
@@ -1299,7 +1298,7 @@ bigint_value_t bigint_print(const bigint_t num, int flag){
         return written;
     }
 
-    bigint_value_t val, r, divisor = 1000000000000000000llu;
+    bigint_value_t val, divisor = 1000000000000000000llu;
     bigint_t d, bignum;
     bigint_t tmp1, tmp2;
     bigint_init_from(&d, &divisor, 1, 1);
@@ -1318,18 +1317,12 @@ bigint_value_t bigint_print(const bigint_t num, int flag){
         bigint_copy(tmp1, &tmp2);
         bigint_div(tmp2, d, &tmp1, &bignum);
 
-        cnt = (tmp1.size > 1) * 18; // to print all digits if remainder less than necessary digits count
+        cnt = (tmp1.size > 0) * 18; // to print all digits if remainder less than necessary digits count
 
-        val = bignum.data[0];
-        while(true) { // reverse 'print' integer
-            val = div_r(val, 10, &r);
+        //printf("%llu", bignum.size == 0 ? 0 : bignum.data[0]);
 
-            buf[written++] = (char)r + '0';
-
-            if(--cnt <= 0 && val <= 0) {
-                break;
-            }
-        }
+        val = bignum.size == 0 ? 0 : bignum.data[0];
+        written += reverse_int_buf(val, cnt, buf + written, 999);
 
         //written += sprintf_s(buf + written, buf_size - written, "%u", (uint32_t)bignum.data[0]);
     } while(!bigint_is_zero(tmp1));
@@ -1565,6 +1558,127 @@ void bigintf_from_int(uint64_t num, uint64_t den,bigintf_t* out) {
     bigintf_simplify(out);
 }
 
+bigint_value_t int_pow10(int n) {
+    bigint_value_t res = 1;
+    while(n --> 0) {
+        res *= 10;
+    }
+    return res;
+}
+
+void bigintf_from_f64(double num, bigintf_t* out) {
+    if(!out) {
+        return;
+    }
+
+    char buf[DOUBLE_BUF_SIZE];
+    //char buf_exp10[DOUBLE_BUF_SIZE];
+
+    snprintf(buf, DOUBLE_BUF_SIZE, "%.*f", DOUBLE_DIGITS, num);
+
+    int negative = 0;
+    if(buf[0] == '-') {
+        negative = 1;
+    }
+
+    int whole = calc_x_len(buf + negative, isdigit);
+
+    int decimal = DOUBLE_DIGITS; // count degits after .
+    for(; decimal > 0; decimal--){
+        if(buf[negative + whole + 1 + decimal - 1] != '0') {
+            break;
+        }
+    }
+
+    memmove(buf + negative + whole, buf + negative + whole + 1, decimal); // copy to eliminate .
+    buf[negative + whole + decimal] = '\0'; // add terminator
+
+    bigintf_init(out);
+    bigint_from_string(buf, &out->numerator);
+    //bigint_from_string(buf_exp10, &out->denominator);
+    bigint_from_uint(int_pow10(decimal), &out->denominator);
+
+    bigintf_simplify(out);
+}
+
+
+double bigintf_to_f64(const bigintf_t num) {
+    char buf[DOUBLE_BUF_SIZE];
+    bigint_value_t v =  bigintf_to_string(num, buf, DOUBLE_BUF_SIZE, DOUBLE_DIGITS, BIF_AS_DECIMAL);
+    double res = strtod(buf, 0);
+    return res;
+}
+
+bigint_value_t bigintf_to_string(const bigintf_t num, char* out, bigint_value_t max_size, bigint_value_t fraction_max, int flag) {
+    if(!out) {
+        return 0;
+    }
+
+    bigint_value_t written = 0;
+
+    if(!(flag & BIF_AS_DECIMAL)) {
+        written += bigint_to_string(num.numerator, out,  max_size);
+        written += snprintf(out + written, max_size - written, " / ");
+        written += bigint_to_string(num.denominator, out + written, max_size - written);
+        return written;
+    }
+
+    bigint_t q, r, nr;
+    bigint_init(&q);
+    bigint_init(&r);
+    bigint_init(&nr);
+
+    bigint_copy(num.numerator, &nr);
+    nr.negative = false;
+    assert(!num.denominator.negative);
+
+    if(num.numerator.negative) {
+        written += snprintf(out + written, max_size - written, "-");
+    }
+
+    bigint_div(nr, num.denominator, &q, &r);
+    written += bigint_to_string(q, out + written, max_size - written);
+
+    if(bigint_is_zero(r)){
+        return written;
+    }
+
+    written += snprintf(out + written, max_size - written, ".");
+
+    bigint_copy(r, &nr);
+
+    bigint_value_t denominator = 10;
+    bigint_t d;
+    bigint_init_from(&d, &denominator, 1, 1);
+
+    if(fraction_max <= 0) {
+        fraction_max = BIGINT_FRACTION_PRINT_MAX;
+    }
+
+    bigint_value_t written_whole = written;
+    while(true){
+        bigint_mul(nr, d, &q);
+        bigint_copy(q, &nr);
+
+        bigint_div(nr, num.denominator, &q, &r);
+
+        out[written++] = (char)bigint_to_uint(q) + '0';
+
+        if(bigint_is_zero(r) || (written - written_whole >= fraction_max) || (written >= max_size)){
+            break;
+        }
+
+        bigint_copy(r, &nr);
+    }
+
+    out[written] = '\0';
+
+    bigint_destroy(&q);
+    bigint_destroy(&r);
+    bigint_destroy(&nr);
+
+    return written;
+}
 
 bigint_value_t bigintf_print(const bigintf_t num, bigint_value_t fraction_max, int flag){
     bigint_value_t written = 0;
@@ -1600,13 +1714,14 @@ bigint_value_t bigintf_print(const bigintf_t num, bigint_value_t fraction_max, i
 
     bigint_copy(r, &nr);
 
-    bigint_value_t ten = 10;
+    bigint_value_t denominator = 10;
     bigint_t d;
-    bigint_init_from(&d, &ten, 1, 1);
+    bigint_init_from(&d, &denominator, 1, 1);
 
     if(fraction_max <= 0) {
         fraction_max = BIGINT_FRACTION_PRINT_MAX;
     }
+
     bigint_value_t written_whole = written;
     while(true){
         bigint_mul(nr, d, &q);

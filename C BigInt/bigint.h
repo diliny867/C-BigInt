@@ -103,6 +103,8 @@ void bigint_and(const bigint_t num1, const bigint_t num2, bigint_t* out);
 void bigint_xor(const bigint_t num1, const bigint_t num2, bigint_t* out);
 void bigint_inv(const bigint_t num, bigint_t* out);
 
+bool bigint_fits_int(const bigint_t num, bool signed_);
+
 bigint_value_t bigint_bit_length(const bigint_t num);
 void bigint_setbit(bigint_t* out, bigint_value_t index);
 
@@ -117,8 +119,8 @@ bigint_ivalue_t bigint_to_int_greedy(const bigint_t num);
 void bigint_from_string(char* str, bigint_t* out);
 void bigint_from_xstring(char* str, bigint_t* out);
 
-bigint_value_t bigint_to_string(const bigint_t num, char* out, int max_size);
-bigint_value_t bigint_to_xstring(const bigint_t num, char* out, int max_size, int flag);
+bigint_value_t bigint_to_string(const bigint_t num, char* out, bigint_value_t max_size);
+bigint_value_t bigint_to_xstring(const bigint_t num, char* out, bigint_value_t max_size, int flag);
 
 bigint_value_t bigint_print(const bigint_t num, int flag);
 bigint_value_t bigint_print_hex(const bigint_t num, int flag);
@@ -126,6 +128,13 @@ bigint_value_t bigint_print_hex(const bigint_t num, int flag);
 
 
 #ifndef BIGINT_NO_FRACTIONS
+
+// for from double conversion
+#include <float.h>
+
+#define DOUBLE_DIGITS DBL_DIG
+#define DOUBLE_BUF_SIZE (308 + DOUBLE_DIGITS + 3)
+
 
 void bigintf_init(bigintf_t* num);
 void bigintf_clear(bigintf_t* num);
@@ -152,6 +161,10 @@ void bigintf_from_bigints(bigint_t num, bigint_t den, bigintf_t* out);
 
 void bigintf_from_uint(uint64_t num, uint64_t den, bigintf_t* out);
 void bigintf_from_int(uint64_t num, uint64_t den,bigintf_t* out);
+void bigintf_from_f64(double num,bigintf_t* out);
+
+double bigintf_to_f64(const bigintf_t num);
+bigint_value_t bigintf_to_string(const bigintf_t num, char* out, bigint_value_t max_size, bigint_value_t fraction_max, int flag);
 
 bigint_value_t bigintf_print(const bigintf_t num, bigint_value_t fraction_max, int flag);
 
