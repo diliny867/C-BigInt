@@ -13,13 +13,13 @@
         print_bigint(num6, FLAG, #num6);                       \
     } while(0)
 
-#define PRINTNUMS_ALL() do { printf("\n"); PRINTNUMS(num1, num2, num3, num4, num5, num6, BI_ADD0X | BI_PRINT_COUNT); }while(0)
+#define PRINTNUMS_ALL() do { printf("\n"); PRINTNUMS(num1, num2, num3, num4, num5, num6, BI_ADD0X); }while(0)
 
 void print_bigint(bigint_t num, int flag, char* label) {
     printf("%s: %3d %3u  dec: ", label, num.size, num.capacity);
     bigint_print(num, flag);
     printf("  hex: ");
-    bigint_print_hex(num, flag);
+    bigint_print(num, BI_HEX | flag);
     printf("\n");
 }
 
@@ -80,12 +80,12 @@ void test_bigints() {
 
     PRINTNUMS_ALL();
 
-    bigint_from_string("-207428133789596931991798422905", &num5);
-    bigint_from_xstring("-0x29e3c87e076f96884328a1d79", &num4);
+    bigint_from_string("-207428133789596931991798422905", &num5, 0);
+    bigint_from_string("-0x29e3c87e076f96884328a1d79", &num4, BI_HEX);
 
     char buf1[256], buf2[256];
-    bigint_to_string(num5, buf1, 256);
-    bigint_to_xstring(num4, buf2, 256, BI_ADD0X);
+    bigint_to_string(num5, buf1, 256, 0);
+    bigint_to_string(num4, buf2, 256, BI_HEX | BI_ADD0X);
 
     PRINTNUMS_ALL();
     printf("num5  s: %s\n", buf1);
@@ -100,6 +100,11 @@ void test_bigints() {
     //bigint_pow(num4, num2, &num5);
 
     PRINTNUMS_ALL();
+
+    //bigint_from_uint(100000, &num5);
+    //bigint_fact(num5, &num6);
+
+    //PRINTNUMS_ALL();
 
 
     bigint_destroy(&num1);
@@ -119,7 +124,7 @@ void example(){
 
     // set values
     bigint_from_int(0x61287c568192, &num1);
-    bigint_from_string("7298570923875238950239857290387523759237905820395870293572398572390857023895", &num2);
+    bigint_from_string("7298570923875238950239857290387523759237905820395870293572398572390857023895", &num2, 0);
 
     // num3 = num1 * num2
     bigint_mul(num1, num2, &num3);
@@ -223,17 +228,17 @@ void test_bigint_fractions() {
     //bigintf_mul(num3, num3, &num2);
     //bigintf_mul(num2, num2, &num3);
 
-    //bigintf_print(num3, 0, 0);
+    //bigintf_fprint(num3, 0, 0);
     //printf("\n");
-    //bigintf_print(num3, 200, BIF_AS_DECIMAL);
+    //bigintf_fprint(num3, 200, BIF_AS_DECIMAL);
     //printf("\n");
 }
 
 int main(int argc, char** argv) {
 
-    //test_bigints();
+    test_bigints();
 
-    test_bigint_fractions();
+    //test_bigint_fractions();
 
     //example();
 

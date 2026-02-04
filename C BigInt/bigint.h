@@ -2,6 +2,7 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include <stdio.h>
 
 
 #define BIGINT_MAX_WORD_COUNT INT32_MAX
@@ -26,12 +27,20 @@ typedef struct {
 
 
 typedef enum {
-    BI_ADD0X         = 1 << 0,
-    BI_LARGE_LETTERS = 1 << 1,
-    BI_PAD_HEX       = 1 << 2,
-    BI_PRINT_COUNT   = 1 << 3,
+    BI_HEX           = 1 << 0,
+    BI_ADD0X         = 1 << 1,
+    BI_LARGE_LETTERS = 1 << 2,
+    BI_PAD_HEX       = 1 << 3,
     BI_BIF_START     = 1 << 4
 } bigint_flag_e;
+
+
+#define BIGINT_BASE (1llu << 63llu)
+
+
+#ifndef BIGINT_DEFAULT_INIT_WORD_COUNT
+# define BIGINT_DEFAULT_INIT_WORD_COUNT 1
+#endif
 
 
 #ifndef BIGINT_NO_FRACTIONS
@@ -73,14 +82,18 @@ void bigint_destroy(bigint_t* num);
 void bigint_add(const bigint_t num1, const bigint_t num2, bigint_t* out);
 void bigint_sub(const bigint_t num1, const bigint_t num2, bigint_t* out);
 
+void bigint_inc(const bigint_t num, bigint_t* out);
+void bigint_dec(const bigint_t num, bigint_t* out);
+
 void bigint_mul(const bigint_t num1, const bigint_t num2, bigint_t* UNIQUE(out));
 int  bigint_div(const bigint_t num1, const bigint_t num2, bigint_t* UNIQUE(out), bigint_t* UNIQUE(r));
 
 int  bigint_mod(const bigint_t num1, const bigint_t num2, bigint_t* UNIQUE(out));
 int  bigint_sqrt(const bigint_t num, bigint_t* UNIQUE(out), bool ceil);
 void bigint_pow(const bigint_t num1, const bigint_t num2, bigint_t* UNIQUE(out));
+int  bigint_fact(const bigint_t num, bigint_t* UNIQUE(out));
 void bigint_log2(const bigint_t num, bigint_t* out); // out is always in uint64, maybe output as it and not as bigint
-int bigint_gcd(const bigint_t num1, const bigint_t num2, bigint_t* UNIQUE(out));
+int  bigint_gcd(const bigint_t num1, const bigint_t num2, bigint_t* UNIQUE(out));
 
 void bigint_copy(const bigint_t num, bigint_t* out);
 
@@ -93,7 +106,7 @@ bool bigint_eq(const bigint_t num1, const bigint_t num2);
 int bigint_abscmp(const bigint_t num1, const bigint_t num2);
 int bigint_cmp(const bigint_t num1, const bigint_t num2);
 //bool bigint_is_zero(const bigint_t num);
-#define bigint_is_zero(num) (num.size == 0)
+#define bigint_is_zero(num) ((num).size == 0)
 
 bool bigint_eq_uint(const bigint_t num1, bigint_value_t num2);
 bool bigint_abscmp_uint(const bigint_t num1, bigint_value_t num2);
@@ -105,7 +118,7 @@ void bigint_inv(const bigint_t num, bigint_t* out);
 
 bool bigint_fits_int(const bigint_t num, bool is_signed);
 
-bigint_value_t bigint_bit_length(const bigint_t num);
+bigint_value_t bigint_bit_length(const bigint_t num); // is also log2 of num
 void bigint_setbit(bigint_t* out, bigint_value_t index);
 
 void bigint_from_uint(uint64_t num, bigint_t* out);
@@ -116,14 +129,12 @@ bigint_ivalue_t bigint_to_int(const bigint_t num);
 bigint_value_t bigint_to_uint_greedy(const bigint_t num);
 bigint_ivalue_t bigint_to_int_greedy(const bigint_t num);
 
-void bigint_from_string(char* str, bigint_t* out);
-void bigint_from_xstring(char* str, bigint_t* out);
+void bigint_from_string(char* str, bigint_t* out, int flag);
 
-bigint_value_t bigint_to_string(const bigint_t num, char* out, bigint_value_t max_size);
-bigint_value_t bigint_to_xstring(const bigint_t num, char* out, bigint_value_t max_size, int flag);
+bigint_value_t bigint_to_string(const bigint_t num, char* out, bigint_value_t max_size, int flag);
 
-bigint_value_t bigint_print(const bigint_t num, int flag);
-bigint_value_t bigint_print_hex(const bigint_t num, int flag);
+bigint_value_t bigint_fprint(const bigint_t num, FILE* stream, int flag);
+#define bigint_print(num, flag) bigint_fprint(num, stdout, flag)
 
 
 
@@ -144,7 +155,7 @@ void bigintf_copy(bigintf_t* num, bigintf_t* out);
 
 void bigintf_simplify(bigintf_t* num);
 
-bool bigintf_is_zero(bigintf_t* num);
+bool bigintf_is_zero(bigintf_t num);
 
 int bigintf_abscmp(const bigintf_t num1, const bigintf_t num2);
 int bigintf_cmp(const bigintf_t num1, const bigintf_t num2);
@@ -166,6 +177,7 @@ void bigintf_from_f64(double num,bigintf_t* out);
 double bigintf_to_f64(const bigintf_t num);
 bigint_value_t bigintf_to_string(const bigintf_t num, char* out, bigint_value_t max_size, bigint_value_t fraction_max, int flag);
 
-bigint_value_t bigintf_print(const bigintf_t num, bigint_value_t fraction_max, int flag);
+bigint_value_t bigintf_fprint(const bigintf_t num, FILE* stream, bigint_value_t fraction_max, int flag);
+#define bigintf_print(num, fraction_max, flag) bigintf_fprint(num, stdout, fraction_max, flag)
 
 #endif
