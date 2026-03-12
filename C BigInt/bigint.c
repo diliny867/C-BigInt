@@ -19,18 +19,30 @@ static const bigint_t bigint_one = {&one___, 1, 1, 0};
 #define addcarry(carry, num1, num2, out)   _addcarry_u64((carry), (num1), (num2), (out))
 
 #define umul(num1, num2, high)          _umul128((num1), (num2), (high))
-#define udiv(num1_lo, num1_hi, num2, r) _udiv128((num1_lo), (num1_hi), (num2), (r))
 
 #ifndef _MSC_VER
-static unsigned long long _udiv128(unsigned long long lo, unsigned long long hi, unsigned long long divisor, unsigned long long* r) {
+
+#define max(a,b) (((a) > (b)) ? (a) : (b))
+#define min(a,b) (((a) < (b)) ? (a) : (b))
+
+static unsigned long long _udiv128_(unsigned long long lo, unsigned long long hi, unsigned long long divisor, unsigned long long* r) {
     unsigned __int128 num = ((unsigned __int128)hi << (unsigned __int128)64) | ((unsigned __int128)lo);
     unsigned long long q = num / divisor;
     *r = (num - ((unsigned __int128)q * (unsigned __int128)divisor));
     return q;
 }
-#endif
+#define udiv(num1_lo, num1_hi, num2, r) _udiv128_((num1_lo), (num1_hi), (num2), (r))
+
+#define msb_zeros(val) __builtin_clzll(val)
+
+#else
+
+#define udiv(num1_lo, num1_hi, num2, r) _udiv128((num1_lo), (num1_hi), (num2), (r))
 
 #define msb_zeros(val) __lzcnt64(val)
+
+#endif
+
 
 #define arr_zero(arr, size) memset(arr, 0, size)
 
@@ -52,6 +64,9 @@ static unsigned long long _udiv128(unsigned long long lo, unsigned long long hi,
 #else
 # define calc_capacity(size) (size)
 #endif
+
+
+#define BIGINT_VALUE_BITS (sizeof(bigint_value_t) * 8)
 
 
 static inline void bigint_zero_data(bigint_value_t* data, bigint_size_t size) {
@@ -111,13 +126,6 @@ void bigint_init_from(bigint_t* num, bigint_value_t* data, bigint_size_t size, b
     num->negative = false;
 }
 
-static void bigint_reset_(bigint_t* num) {
-    num->size = 0;
-    num->capacity = 0;
-    num->data = 0;
-    num->negative = 0;
-}
-
 
 static inline int bigint_abscmp_(bigint_value_t* data1, bigint_size_t size1, bigint_value_t* data2, bigint_size_t size2) {
     if(size1 < size2) {
@@ -146,60 +154,59 @@ void bigint_copy(const bigint_t num, bigint_t* out) {
 }
 
 static bigint_size_t bigint_lshift_(bigint_value_t* data, bigint_size_t size, bigint_value_t shift, bigint_size_t offset, bigint_value_t* data_out) {
-    bigint_size_t shift_val = shift & 63; // % 64
+    assert(shift < BIGINT_VALUE_BITS);
 
-    if(shift_val == 0) {
+    if(shift == 0) {
         bigint_copy_(data, size, data_out + offset);
         arr_zero(data_out, offset * sizeof(bigint_value_t));
         return size + offset;
     }
 
-    bigint_value_t inv_shift_val = 64 - shift_val;
+    bigint_value_t inv_shift_val = BIGINT_VALUE_BITS - shift;
     data_out[size + offset] = 0;
 
     for(bigint_size_t i = 0; i < size; i++) {
         bigint_size_t index = size - i - 1;
         data_out[index + 1 + offset] |= data[index] >> inv_shift_val;
-        data_out[index + offset]      = data[index] << shift_val;
+        data_out[index + offset]      = data[index] << shift;
     }
 
     return bigint_shrink_(data_out, size + offset + 1);
 }
 void bigint_lshift(const bigint_t num, bigint_value_t shift, bigint_t* out) {
-    bigint_size_t offset = (bigint_size_t)shift >> 6; // / 64
+    bigint_size_t offset = (bigint_size_t)(shift / BIGINT_VALUE_BITS);
     bigint_expand(out, num.size + 1 + offset);
-    out->size = bigint_lshift_(num.data, num.size, shift, offset, out->data);
+    out->size = bigint_lshift_(num.data, num.size, shift & (BIGINT_VALUE_BITS - 1), offset, out->data);
 }
 
 static bigint_size_t bigint_rshift_(bigint_value_t* data, bigint_size_t size, bigint_value_t shift, bigint_size_t offset, bigint_value_t* data_out) {
-    bigint_size_t shift_val = shift & 63;
+    assert(shift < BIGINT_VALUE_BITS);
 
     if(size <= offset) {
         data_out[0] = 0;
         return 1;
     }
 
-    if(shift_val == 0) {
+    if(shift == 0) {
         bigint_copy_(data + offset, size - offset, data_out);
         return size - offset;
     }
 
-    bigint_size_t inv_shift_val = 64 - shift_val;
+    bigint_size_t inv_shift_val = BIGINT_VALUE_BITS - shift;
 
-    data_out[0] = data[0] >> shift_val;
+    data_out[0] = data[0] >> shift;
     for(bigint_size_t i = 1; i < size - offset; i++) {
         data_out[i - 1] |= data[i + offset] << inv_shift_val;
-        data_out[i]      = data[i + offset] >> shift_val;
+        data_out[i]      = data[i + offset] >> shift;
     }
 
     return bigint_shrink_(data_out, size - offset);
 }
 void bigint_rshift(const bigint_t num, bigint_value_t shift, bigint_t* out) {
-    bigint_size_t offset = (bigint_size_t)shift >> 6; // / 64
+    bigint_size_t offset = (bigint_size_t)(shift / BIGINT_VALUE_BITS);
     bigint_expand(out, num.size - offset);
-    out->size = bigint_rshift_(num.data, num.size, shift, offset, out->data);
+    out->size = bigint_rshift_(num.data, num.size, shift & (BIGINT_VALUE_BITS - 1), offset, out->data);
 }
-
 
 
 static bigint_size_t bigint_add_(bigint_value_t* data1, bigint_size_t size1, bigint_value_t* data2, bigint_size_t size2, bigint_value_t* data_out) { //ignores negatives
@@ -465,7 +472,7 @@ static void bigint_div_(bigint_value_t* data1, bigint_size_t size1, bigint_value
     bigint_size_t size_tmp, size_a, size_b;
 
     int shift = msb_zeros(b_left); // msb bits
-    assert(shift < 64); // only if b_left is 0, what shouldnt happen
+    assert(shift < BIGINT_VALUE_BITS); // only if b_left is 0, what shouldnt happen
 
     size_a = bigint_lshift_(data_a, size1, shift, 0, data_a);
     size_b = bigint_lshift_(data_b, size2, shift, 0, data_b);
@@ -509,7 +516,6 @@ static void bigint_div_(bigint_value_t* data1, bigint_size_t size1, bigint_value
         if(qi){
             size_tmp = bigint_mul_(data_b, size_b, &qi, 1, data_tmp); // remultiply to check if correct
             size_tmp = bigint_shrink_(data_tmp, size_tmp);
-
 
             int count = 0;
             while(1){
@@ -916,7 +922,7 @@ bigint_value_t bigint_bit_length(const bigint_t num) {
 void bigint_setbit(bigint_t* out, bigint_value_t index) {
     bigint_size_t size = (bigint_size_t)(index / 64llu + 1llu);
     bigint_expand(out, size);
-    out->data[size - 1] |= 1 << (index & 63);
+    out->data[size - 1] |= 1llu << (index & 63);
     out->size = size;
 }
 
@@ -1039,11 +1045,7 @@ inline bool bigint_greater(const bigint_t num1, const bigint_t num2) {
     }
     return negative;
 }
- bool bigint_eq(const bigint_t num1, const bigint_t num2) {
-    if(num1.negative != num2.negative) {
-        return false;
-    }
-
+ bool bigint_abseq(const bigint_t num1, const bigint_t num2) {
     if(num1.size == num2.size) {
         for(bigint_size_t i = 1; i <= num1.size; i++) {
             if(num1.data[num1.size - i] != num2.data[num1.size - i]) {
@@ -1053,6 +1055,13 @@ inline bool bigint_greater(const bigint_t num1, const bigint_t num2) {
         return true;
     }
     return false;
+}
+ bool bigint_eq(const bigint_t num1, const bigint_t num2) {
+    if(num1.negative != num2.negative) {
+        return false;
+    }
+
+    return bigint_abseq(num1, num2);
 }
 
 int bigint_abscmp(const bigint_t num1, const bigint_t num2) {
@@ -1320,21 +1329,21 @@ bigint_value_t div_r(bigint_value_t v, bigint_value_t d, bigint_value_t* r) {
     *r = v - q * d;
     return q;
 }
-bigint_value_t reverse_int_buf(bigint_value_t val, int min_cnt, char* buf, int max_size) {
-    bigint_value_t r, size = 0;
-    while(max_size--) { // reverse 'print' integer
+bigint_value_t reverse_int_buf(bigint_value_t val, bigint_value_t min_cnt, char* buf, bigint_value_t max_size) {
+    bigint_value_t r, count = 0;
+    while(count < max_size) { // reverse 'print' integer
         val = div_r(val, 10, &r);
 
-        buf[size++] = (char)r + '0';
+        buf[count++] = (char)r + '0';
 
-        if(--min_cnt <= 0 && val <= 0) {
+        if(count >= min_cnt && val <= 0) {
             break;
         }
     }
-    return size;
+    return count;
 }
 
-static bigint_value_t bigint_to_string_dec_(const bigint_t num, char* out, int max_size, int flag) {
+static bigint_value_t bigint_to_string_dec_(const bigint_t num, char* out, bigint_value_t max_size, int flag) {
     bigint_value_t written = 0;
 
     if(!out || max_size <= 0) {
@@ -1383,7 +1392,7 @@ static bigint_value_t bigint_to_string_dec_(const bigint_t num, char* out, int m
     return written;
 }
 
-static bigint_value_t bigint_to_xstring_(const bigint_t num, char* out, int max_size, int flag) {
+static bigint_value_t bigint_to_string_hex_(const bigint_t num, char* out, bigint_value_t max_size, int flag) {
     bigint_value_t written = 0;
     int large_letters = flag & BI_LARGE_LETTERS;
     int pad = flag & BI_PAD_HEX;
@@ -1411,9 +1420,9 @@ static bigint_value_t bigint_to_xstring_(const bigint_t num, char* out, int max_
     return written;
 }
 
-bigint_value_t bigint_to_string(const bigint_t num, char* out, int max_size, int flag) {
+bigint_value_t bigint_to_string(const bigint_t num, char* out, bigint_value_t max_size, int flag) {
     if(flag & BI_HEX) {
-        return bigint_to_xstring_(num, out, max_size, flag);
+        return bigint_to_string_hex_(num, out, max_size, flag);
     }
     return bigint_to_string_dec_(num, out, max_size, flag);
 }
@@ -1469,16 +1478,17 @@ static bigint_value_t bigint_fprint_dec_(const bigint_t num, FILE* stream, int f
     bigint_value_t val, divisor = 1000000000000000000llu;
     bigint_t d, bignum;
     bigint_t tmp1, tmp2;
+    bigint_size_t size = num.size + 1;
+    bigint_size_t buf_size = num.size * 20 + 1;
     bigint_init_from(&d, &divisor, 1, 1);
-    bigint_value_t* tmp_alloc = bigint_alloc((num.size + 1 + num.size + 1 + num.size + 1) * sizeof(bigint_value_t));
-    bigint_init_from(&bignum, tmp_alloc,                               0, num.size + 1);
-    bigint_init_from(&tmp1,   tmp_alloc + 1 + num.size,                0, num.size + 1);
-    bigint_init_from(&tmp2,   tmp_alloc + 1 + num.size + 1 + num.size, 0, num.size + 1);
+    bigint_value_t* tmp_alloc = bigint_alloc((size + size + size) * sizeof(bigint_value_t) + buf_size * sizeof(char));
+    bigint_init_from(&bignum, tmp_alloc,               0, size);
+    bigint_init_from(&tmp1,   tmp_alloc + size,        0, size);
+    bigint_init_from(&tmp2,   tmp_alloc + size + size, 0, size);
     bigint_copy(num, &tmp1);
     tmp1.negative = false;
 
-    bigint_value_t buf_size = num.size * 20 + 1;
-    char* buf = bigint_alloc(buf_size * sizeof(char)); // should be enough
+    char* buf = (char*)(tmp_alloc + size + size + size);
     int cnt;
 
     do {
@@ -1488,7 +1498,7 @@ static bigint_value_t bigint_fprint_dec_(const bigint_t num, FILE* stream, int f
         cnt = (tmp1.size > 0) * 18; // to print all digits if remainder less than necessary digits count
 
         val = bignum.size == 0 ? 0 : bignum.data[0];
-        written += reverse_int_buf(val, cnt, buf + written, 999);
+        written += reverse_int_buf(val, cnt, buf + written, buf_size - written);
 
     } while(!bigint_is_zero(tmp1));
 
@@ -1501,9 +1511,12 @@ static bigint_value_t bigint_fprint_dec_(const bigint_t num, FILE* stream, int f
         written += fprintf(stream, "-");
     }
 
-    for(bigint_value_t i = 1; i <= count; i++) {
-        putc(buf[count - i], stream);
-    }
+    arr_reverse(char, buf, count);
+    fwrite(buf, sizeof(char), count, stream);
+
+    //for(bigint_value_t i = 1; i <= count; i++) {
+    //    putc(buf[count - i], stream);
+    //}
 
     bigint_free(tmp_alloc);
 
@@ -1521,7 +1534,7 @@ bigint_value_t bigint_fprint(const bigint_t num, FILE* stream, int flag) {
 
 #ifndef BIGINT_NO_FRACTIONS
 
-#define BIGINT_FRACTION_PRINT_MAX 100
+#define BIGINT_FRACTION_DECIMALS_PRINT_DEFAULT 100
 
 void bigintf_init(bigintf_t* num){
     if(!num){
@@ -1563,8 +1576,43 @@ bool bigintf_is_zero(bigintf_t num){
     return num.numerator.size == 0;
 }
 
+int bigintf_abscmp(const bigintf_t num1, const bigintf_t num2) {
+    if(bigint_abseq(num1.denominator, num2.denominator)) {
+        return bigint_abscmp(num1.numerator, num2.numerator);
+    }
+    if(bigint_abseq(num1.numerator, num2.numerator)) {
+        return bigint_abscmp(num2.denominator, num1.denominator);
+    }
+
+    bigint_size_t size1 = num1.numerator.size * num2.denominator.size + 1;
+    bigint_size_t size2 = num2.numerator.size * num1.denominator.size + 1;
+
+    bigint_value_t* tmp_alloc = bigint_alloc((size1 + size2) * sizeof(bigint_value_t));
+    bigint_t tmp1, tmp2;
+    bigint_init_from(&tmp1, tmp_alloc, 0, size1);
+    bigint_init_from(&tmp2, tmp_alloc, 0, size2);
+
+    bigint_mul(num1.numerator, num2.denominator, &tmp1);
+    bigint_mul(num2.numerator, num1.denominator, &tmp2);
+
+    int cmp = bigint_abscmp(tmp1, tmp2);
+
+    bigint_free(tmp_alloc);
+
+    return cmp;
+}
+
+int bigintf_cmp(const bigintf_t num1, const bigintf_t num2) {
+    if(num1.numerator.negative != num2.numerator.negative) {
+        return num1.numerator.negative ? -1 : 1;
+    }
+
+    int cmp = bigintf_abscmp(num1, num2);
+    return num1.numerator.negative ? -cmp : cmp;
+}
+
 bool bigintf_abseq(const bigintf_t num1, const bigintf_t num2){
-    return bigint_eq(num1.numerator, num2.numerator) && bigint_eq(num1.denominator, num2.denominator);
+    return bigint_abseq(num1.numerator, num2.numerator) && bigint_abseq(num1.denominator, num2.denominator);
 }
 
 void bigintf_simplify(bigintf_t* num){
@@ -1572,7 +1620,11 @@ void bigintf_simplify(bigintf_t* num){
         return;
     }
 
-    if(bigintf_is_zero(*num) || bigint_abscmp_uint(num->numerator, 1) == 0 || bigint_abscmp_uint(num->denominator, 1) == 0){
+    if(bigintf_is_zero(*num)) {
+        bigint_from_uint(0, &num->denominator);
+        return;
+    }
+    if(bigint_abscmp_uint(num->numerator, 1) == 0 || bigint_abscmp_uint(num->denominator, 1) == 0){
         return;
     }
 
@@ -1583,18 +1635,15 @@ void bigintf_simplify(bigintf_t* num){
         bigint_from_uint(1, &num->numerator);
         bigint_from_uint(1, &num->denominator);
 
-        num->numerator.negative = negative;
-
         return;
     }
 
-    bigint_size_t size_max = max(num->numerator.size, num->denominator.size) + 1;
-    bigint_size_t size_min = min(num->numerator.size, num->denominator.size) + 1;
+    bigint_size_t size = max(num->numerator.size, num->denominator.size) + 1;
     bigint_t gcd, r, tmp;
-    bigint_value_t* tmp_alloc = bigint_alloc((size_min + size_max + size_max) * sizeof(bigint_value_t));
-    bigint_init_from(&gcd, tmp_alloc,                             0, size_min);
-    bigint_init_from(&r,   tmp_alloc + gcd.capacity,              0, size_max);
-    bigint_init_from(&tmp, tmp_alloc + gcd.capacity + r.capacity, 0, size_max);
+    bigint_value_t* tmp_alloc = bigint_alloc((size + size + size) * sizeof(bigint_value_t));
+    bigint_init_from(&gcd, tmp_alloc,               0, size);
+    bigint_init_from(&r,   tmp_alloc + size,        0, size);
+    bigint_init_from(&tmp, tmp_alloc + size + size, 0, size);
 
     bigint_gcd(num->numerator, num->denominator, &gcd);
 
@@ -1616,9 +1665,17 @@ static void bigintf_add_sub_(const bigintf_t num1, const bigintf_t num2, bigintf
         return;
     }
 
-    if(bigint_abscmp(num1.denominator, num2.denominator) == 0){
+    if(bigint_abseq(num1.denominator, num2.denominator)){
         bigint_copy(num1.denominator, &out->denominator);
-        bigint_add(num1.numerator, num2.numerator, &out->numerator);
+        if(sub) {
+            bigint_sub(num1.numerator, num2.numerator, &out->numerator);
+        }else {
+            bigint_add(num1.numerator, num2.numerator, &out->numerator);
+        }
+
+        bigintf_simplify(out);
+
+        return;
     }
 
     bigint_t tmp;
@@ -1660,9 +1717,8 @@ static int bigintf_mul_div_(const bigintf_t num1, const bigintf_t num2, bigintf_
         if(bigintf_abseq(num1, num2)){
             bigint_from_uint(1, &out->numerator);
             bigint_from_uint(1, &out->denominator);
+            return 0;
         }
-
-        return 0;
     }
 
     if(div){
@@ -1758,7 +1814,7 @@ void bigintf_from_f64(double num, bigintf_t* out) {
 
     int whole = calc_x_len(buf + negative, isdigit);
 
-    int decimal = DOUBLE_DIGITS; // count degits after .
+    int decimal = DOUBLE_DIGITS; // count digits after .
     for(; decimal > 0; decimal--){
         if(buf[negative + whole + 1 + decimal - 1] != '0') {
             break;
@@ -1781,7 +1837,7 @@ void bigintf_from_f64(double num, bigintf_t* out) {
 
 double bigintf_to_f64(const bigintf_t num) {
     char buf[DOUBLE_BUF_SIZE];
-    bigint_value_t v =  bigintf_to_string(num, buf, DOUBLE_BUF_SIZE, DOUBLE_DIGITS, BIF_AS_DECIMAL);
+    bigintf_to_string(num, buf, DOUBLE_BUF_SIZE, DOUBLE_DIGITS, BIF_AS_DECIMAL);
     double res = strtod(buf, 0);
     return res;
 }
@@ -1833,7 +1889,7 @@ bigint_value_t bigintf_to_string(const bigintf_t num, char* out, bigint_value_t 
     bigint_init_from(&d, &denominator, 1, 1);
 
     if(fraction_max <= 0) {
-        fraction_max = BIGINT_FRACTION_PRINT_MAX;
+        fraction_max = BIGINT_FRACTION_DECIMALS_PRINT_DEFAULT;
     }
 
     bigint_value_t written_whole = written;
@@ -1902,7 +1958,7 @@ bigint_value_t bigintf_fprint(const bigintf_t num, FILE* stream, bigint_value_t 
     bigint_init_from(&d, &denominator, 1, 1);
 
     if(fraction_max <= 0) {
-        fraction_max = BIGINT_FRACTION_PRINT_MAX;
+        fraction_max = BIGINT_FRACTION_DECIMALS_PRINT_DEFAULT;
     }
 
     bigint_value_t written_whole = written;

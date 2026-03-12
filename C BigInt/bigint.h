@@ -79,6 +79,8 @@ void bigint_shrink(bigint_t* num);
 void bigint_clear(bigint_t* num);
 void bigint_destroy(bigint_t* num);
 
+void bigint_copy(const bigint_t num, bigint_t* out);
+
 void bigint_add(const bigint_t num1, const bigint_t num2, bigint_t* out);
 void bigint_sub(const bigint_t num1, const bigint_t num2, bigint_t* out);
 
@@ -95,14 +97,13 @@ int  bigint_fact(const bigint_t num, bigint_t* UNIQUE(out));
 void bigint_log2(const bigint_t num, bigint_t* out); // out is always in uint64, maybe output as it and not as bigint
 int  bigint_gcd(const bigint_t num1, const bigint_t num2, bigint_t* UNIQUE(out));
 
-void bigint_copy(const bigint_t num, bigint_t* out);
-
 void bigint_lshift(const bigint_t num, bigint_value_t shift, bigint_t* out);
 void bigint_rshift(const bigint_t num, bigint_value_t shift, bigint_t* out);
 
 bool bigint_lesser(const bigint_t num1, const bigint_t num2);
 bool bigint_greater(const bigint_t num1, const bigint_t num2);
 bool bigint_eq(const bigint_t num1, const bigint_t num2);
+bool bigint_abseq(const bigint_t num1, const bigint_t num2);
 int bigint_abscmp(const bigint_t num1, const bigint_t num2);
 int bigint_cmp(const bigint_t num1, const bigint_t num2);
 //bool bigint_is_zero(const bigint_t num);
@@ -151,11 +152,11 @@ void bigintf_init(bigintf_t* num);
 void bigintf_clear(bigintf_t* num);
 void bigintf_destroy(bigintf_t* num);
 
-void bigintf_copy(bigintf_t* num, bigintf_t* out);
+void bigintf_copy(const bigintf_t num, bigintf_t* out);
 
 void bigintf_simplify(bigintf_t* num);
 
-bool bigintf_is_zero(bigintf_t num);
+bool bigintf_is_zero(const bigintf_t num);
 
 int bigintf_abscmp(const bigintf_t num1, const bigintf_t num2);
 int bigintf_cmp(const bigintf_t num1, const bigintf_t num2);
@@ -167,12 +168,12 @@ void bigintf_sub(const bigintf_t num1, const bigintf_t num2, bigintf_t* UNIQUE(o
 void bigintf_mul(const bigintf_t num1, const bigintf_t num2, bigintf_t* UNIQUE(out));
 int  bigintf_div(const bigintf_t num1, const bigintf_t num2, bigintf_t* UNIQUE(out));
 
-void bigintf_from_bigint(bigint_t num, bigintf_t* out);
-void bigintf_from_bigints(bigint_t num, bigint_t den, bigintf_t* out);
+void bigintf_from_bigint(const bigint_t num, bigintf_t* out);
+void bigintf_from_bigints(const bigint_t num, bigint_t den, bigintf_t* out);
 
-void bigintf_from_uint(uint64_t num, uint64_t den, bigintf_t* out);
-void bigintf_from_int(uint64_t num, uint64_t den,bigintf_t* out);
-void bigintf_from_f64(double num,bigintf_t* out);
+void bigintf_from_uint(const uint64_t num, const uint64_t den, bigintf_t* out);
+void bigintf_from_int(const uint64_t num, const uint64_t den,bigintf_t* out);
+void bigintf_from_f64(const double num, bigintf_t* out);
 
 double bigintf_to_f64(const bigintf_t num);
 bigint_value_t bigintf_to_string(const bigintf_t num, char* out, bigint_value_t max_size, bigint_value_t fraction_max, int flag);
