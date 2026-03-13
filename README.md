@@ -1,11 +1,12 @@
 # C BigInt
 
-## WIP arbitrary precision number library. Containing both big integers and big integer fractions
+## Arbitrary precision number library. Containing both big integers and big integer fractions
 
 ### Big Integers:
 Addition, Substraction, Multiplication, Division, Modulo \
-Power, Square Root, Log2, Gcd \
+Power, Square Root, Log2, Gcd, Factorial \
 Right and Left bit Shifts, Comparison \
+Bit And, Or, Xor, Invert, Set Bit, Bit Length \
 Base 10 and 16 Printing \
 To and From Base 10 and 16 Strings \
 To and From Integers
@@ -14,7 +15,8 @@ To and From Integers
 Addition, Substraction, Multiplication, Division \
 Simplification \
 Base 10 Decimal and Fractional Printing \
-To and From Integers
+To and From Base 10 Strings \
+To and From Floats
 
 ## Example:
 ```c
