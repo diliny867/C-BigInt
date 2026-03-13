@@ -4,10 +4,9 @@
 #include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdarg.h>
 #include <string.h>
 #include <math.h>
-
-#include <intrin.h>
 
 
 static const bigint_t bigint_zero = {0, 0, 0, 0};
@@ -15,33 +14,64 @@ static const bigint_value_t one___ = 1;
 static const bigint_t bigint_one = {&one___, 1, 1, 0};
 
 
-#define subborrow(borrow, num1, num2, out) _subborrow_u64((borrow), (num1), (num2), (out))
-#define addcarry(carry, num1, num2, out)   _addcarry_u64((carry), (num1), (num2), (out))
-
-#define umul(num1, num2, high)          _umul128((num1), (num2), (high))
-
 #ifndef _MSC_VER
 
 #define max(a,b) (((a) > (b)) ? (a) : (b))
 #define min(a,b) (((a) < (b)) ? (a) : (b))
 
-static unsigned long long _udiv128_(unsigned long long lo, unsigned long long hi, unsigned long long divisor, unsigned long long* r) {
-    unsigned __int128 num = ((unsigned __int128)hi << (unsigned __int128)64) | ((unsigned __int128)lo);
-    unsigned long long q = num / divisor;
-    *r = (num - ((unsigned __int128)q * (unsigned __int128)divisor));
+static inline uint8_t subborrow(uint8_t borrow, uint64_t num1, uint64_t num2, uint64_t *out){
+    uint64_t tmp = num1 - num2;
+    *out = tmp - borrow;
+    return (tmp > num1) | (*out > tmp);
+}
+static inline uint8_t addcarry(uint8_t carry, uint64_t num1, uint64_t num2, uint64_t *out){
+    uint64_t tmp = num1 + num2;
+    *out = tmp + carry;
+    return (tmp < num1) | (*out < tmp);
+}
+
+static inline uint64_t umul(uint64_t num1, uint64_t num2, uint64_t *high){
+    __uint128_t prod = (__uint128_t)num1 * (__uint128_t)num2;
+    *high = (uint64_t)(prod >> (__uint128_t)64);
+    return (uint64_t)prod;
+}
+
+static inline uint64_t udiv(uint64_t hi, uint64_t lo, uint64_t divisor, uint64_t* r) {
+    __uint128_t num = ((__uint128_t)hi << (__uint128_t)64) | ((__uint128_t)lo);
+    __uint128_t q = num / divisor;
+    *r = (num - (q * (__uint128_t)divisor));
     return q;
 }
-#define udiv(num1_lo, num1_hi, num2, r) _udiv128_((num1_lo), (num1_hi), (num2), (r))
+//#define udiv(num1_lo, num1_hi, num2, r) _udiv128_((num1_lo), (num1_hi), (num2), (r))
 
 #define msb_zeros(val) __builtin_clzll(val)
 
 #else
 
-#define udiv(num1_lo, num1_hi, num2, r) _udiv128((num1_lo), (num1_hi), (num2), (r))
+#include <intrin.h>
+
+#define subborrow(borrow, num1, num2, out) _subborrow_u64((borrow), (num1), (num2), (out))
+#define addcarry(carry, num1, num2, out)   _addcarry_u64((carry), (num1), (num2), (out))
+
+#define umul(num1, num2, high)          _umul128((num1), (num2), (high))
+
+#define udiv(num1_hi, num1_lo, num2, r) _udiv128((num1_hi), (num1_lo), (num2), (r))
 
 #define msb_zeros(val) __lzcnt64(val)
 
 #endif
+
+// snprintf that returns actually written characters count
+static inline int snprintf2(char *buf, size_t size, char *format, ...){
+    if(size <= 0){
+        return 0;
+    }
+    va_list args;
+    va_start(args, format);
+    int ret = vsnprintf(buf, size, format, args);
+    va_end(args);
+    return ret >= size ? size - 1 : ret;
+}
 
 
 #define arr_zero(arr, size) memset(arr, 0, size)
@@ -1351,7 +1381,7 @@ static bigint_value_t bigint_to_string_dec_(const bigint_t num, char* out, bigin
     }
 
     if(num.size == 0) {
-        written += sprintf_s(out, max_size - written, "0");
+        written += snprintf2(out, max_size - written, "0");
         return written;
     }
 
@@ -1366,7 +1396,7 @@ static bigint_value_t bigint_to_string_dec_(const bigint_t num, char* out, bigin
     tmp1.negative = false;
 
     if(num.negative) {
-        written += sprintf_s(out, max_size - written, "-");
+        written += snprintf2(out, max_size - written, "-");
     }
 
     int cnt;
@@ -1399,19 +1429,19 @@ static bigint_value_t bigint_to_string_hex_(const bigint_t num, char* out, bigin
     char* format;
 
     if(num.negative) {
-        written += sprintf_s(out + written, max_size - written, "-");
+        written += snprintf2(out + written, max_size - written, "-");
     }
 
     if(flag & BI_ADD0X) {
-        written += sprintf_s(out + written, max_size - written, large_letters ? "0X" : "0x");
+        written += snprintf2(out + written, max_size - written, large_letters ? "0X" : "0x");
     }
 
     format = pad ? (large_letters ? "%016llX" : "%016llx") : (large_letters ? "%llX" : "%llx");
-    written += sprintf_s(out + written, max_size - written, format, num.size >= 1 ? num.data[num.size - 1] : 0);
+    written += snprintf2(out + written, max_size - written, format, num.size >= 1 ? num.data[num.size - 1] : 0);
 
     format = large_letters ? "%016llX" : "%016llx";
     for(bigint_size_t i = 2; i <= num.size; i++) {
-        written += sprintf_s(out + written, max_size - written, format, num.data[num.size - i]);
+        written += snprintf2(out + written, max_size - written, format, num.data[num.size - i]);
     }
 
     //assert(max_size - written > 0);
