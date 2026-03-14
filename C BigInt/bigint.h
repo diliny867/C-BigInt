@@ -99,6 +99,7 @@ int  bigint_gcd(const bigint_t num1, const bigint_t num2, bigint_t* UNIQUE(out))
 
 void bigint_lshift(const bigint_t num, bigint_value_t shift, bigint_t* out);
 void bigint_rshift(const bigint_t num, bigint_value_t shift, bigint_t* out);
+void bigint_srshift(const bigint_t num, bigint_value_t shift, bigint_t* out); // fills high bits with 1 if number is negative and msb is 1
 
 bool bigint_lesser(const bigint_t num1, const bigint_t num2);
 bool bigint_greater(const bigint_t num1, const bigint_t num2);

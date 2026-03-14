@@ -183,7 +183,7 @@ void bigint_copy(const bigint_t num, bigint_t* out) {
     bigint_copy_(num.data, num.size, out->data);
 }
 
-static bigint_size_t bigint_lshift_(bigint_value_t* data, bigint_size_t size, bigint_value_t shift, bigint_size_t offset, bigint_value_t* data_out) {
+static inline bigint_size_t bigint_lshift_(bigint_value_t* data, bigint_size_t size, bigint_value_t shift, bigint_size_t offset, bigint_value_t* data_out) {
     assert(shift < BIGINT_VALUE_BITS);
 
     if(shift == 0) {
@@ -204,12 +204,18 @@ static bigint_size_t bigint_lshift_(bigint_value_t* data, bigint_size_t size, bi
     return bigint_shrink_(data_out, size + offset + 1);
 }
 void bigint_lshift(const bigint_t num, bigint_value_t shift, bigint_t* out) {
+    if(num.size == 0){
+        return;
+    }
     bigint_size_t offset = (bigint_size_t)(shift / BIGINT_VALUE_BITS);
+    bigint_value_t local_shift = shift & (BIGINT_VALUE_BITS - 1llu);
+
     bigint_expand(out, num.size + 1 + offset);
-    out->size = bigint_lshift_(num.data, num.size, shift & (BIGINT_VALUE_BITS - 1llu), offset, out->data);
+
+    out->size = bigint_lshift_(num.data, num.size, local_shift, offset, out->data);
 }
 
-static bigint_size_t bigint_rshift_(bigint_value_t* data, bigint_size_t size, bigint_value_t shift, bigint_size_t offset, bigint_value_t* data_out) {
+static inline bigint_size_t bigint_rshift_(bigint_value_t* data, bigint_size_t size, bigint_value_t shift, bigint_size_t offset, bigint_value_t* data_out) {
     assert(shift < BIGINT_VALUE_BITS);
 
     if(size <= offset) { // shifting full number
@@ -232,9 +238,40 @@ static bigint_size_t bigint_rshift_(bigint_value_t* data, bigint_size_t size, bi
     return bigint_shrink_(data_out, size - offset);
 }
 void bigint_rshift(const bigint_t num, bigint_value_t shift, bigint_t* out) {
+    if(num.size == 0){
+        return;
+    }
     bigint_size_t offset = (bigint_size_t)(shift / BIGINT_VALUE_BITS);
+    bigint_value_t local_shift = shift & (BIGINT_VALUE_BITS - 1llu);
+
     bigint_expand(out, num.size - offset);
-    out->size = bigint_rshift_(num.data, num.size, shift & (BIGINT_VALUE_BITS - 1llu), offset, out->data);
+
+    out->size = bigint_rshift_(num.data, num.size, local_shift, offset, out->data);
+}
+
+static inline void bigint_srshift_fill1_(bigint_size_t size, bigint_value_t shift, bigint_size_t offset, bigint_value_t* data_out) {
+    bigint_size_t inv_shift_val = BIGINT_VALUE_BITS - shift;
+
+    // fill with 1 all where necessary
+    for(bigint_size_t i = 0; i < offset; i++) {
+        data_out[size - i - 1] = 0xFFFFFFFFFFFFFFFF;
+    }
+    data_out[size - offset - 1] |= 0xFFFFFFFFFFFFFFFF << inv_shift_val;
+}
+void bigint_srshift(const bigint_t num, bigint_value_t shift, bigint_t* out) {
+    if(num.size == 0){
+        return;
+    }
+    bigint_size_t offset = (bigint_size_t)(shift / BIGINT_VALUE_BITS);
+    bigint_value_t local_shift = shift & (BIGINT_VALUE_BITS - 1llu);
+
+    bigint_expand(out, num.size - offset);
+
+    out->size = bigint_rshift_(num.data, num.size, local_shift, offset, out->data);
+
+    if(num.negative && (num.data[num.size] & 0x8000000000000000)){
+        bigint_srshift_fill1_(num.size, local_shift, offset, out->data);
+    }
 }
 
 
