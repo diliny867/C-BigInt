@@ -96,7 +96,7 @@ static inline int snprintf2(char *buf, size_t size, char *format, ...){
 #endif
 
 
-#define BIGINT_VALUE_BITS (sizeof(bigint_value_t) * 8)
+#define BIGINT_VALUE_BITS (sizeof(bigint_value_t) * 8llu)
 
 
 static inline void bigint_zero_data(bigint_value_t* data, bigint_size_t size) {
@@ -206,15 +206,14 @@ static bigint_size_t bigint_lshift_(bigint_value_t* data, bigint_size_t size, bi
 void bigint_lshift(const bigint_t num, bigint_value_t shift, bigint_t* out) {
     bigint_size_t offset = (bigint_size_t)(shift / BIGINT_VALUE_BITS);
     bigint_expand(out, num.size + 1 + offset);
-    out->size = bigint_lshift_(num.data, num.size, shift & (BIGINT_VALUE_BITS - 1), offset, out->data);
+    out->size = bigint_lshift_(num.data, num.size, shift & (BIGINT_VALUE_BITS - 1llu), offset, out->data);
 }
 
 static bigint_size_t bigint_rshift_(bigint_value_t* data, bigint_size_t size, bigint_value_t shift, bigint_size_t offset, bigint_value_t* data_out) {
     assert(shift < BIGINT_VALUE_BITS);
 
-    if(size <= offset) {
-        data_out[0] = 0;
-        return 1;
+    if(size <= offset) { // shifting full number
+        return 0;
     }
 
     if(shift == 0) {
@@ -235,7 +234,7 @@ static bigint_size_t bigint_rshift_(bigint_value_t* data, bigint_size_t size, bi
 void bigint_rshift(const bigint_t num, bigint_value_t shift, bigint_t* out) {
     bigint_size_t offset = (bigint_size_t)(shift / BIGINT_VALUE_BITS);
     bigint_expand(out, num.size - offset);
-    out->size = bigint_rshift_(num.data, num.size, shift & (BIGINT_VALUE_BITS - 1), offset, out->data);
+    out->size = bigint_rshift_(num.data, num.size, shift & (BIGINT_VALUE_BITS - 1llu), offset, out->data);
 }
 
 
@@ -946,14 +945,32 @@ bigint_value_t bigint_bit_length(const bigint_t num) {
     if(num.size == 0) {
         return 0;
     }
-    return num.size * 64llu + 64 - msb_zeros(num.data[num.size - 1]);
+    return num.size * BIGINT_VALUE_BITS + BIGINT_VALUE_BITS - msb_zeros(num.data[num.size - 1]);
 }
 
-void bigint_setbit(bigint_t* out, bigint_value_t index) {
-    bigint_size_t size = (bigint_size_t)(index / 64llu + 1llu);
+void bigint_setbit(bigint_value_t index, bigint_t* out) {
+    bigint_size_t size = (bigint_size_t)(index / BIGINT_VALUE_BITS + 1llu);
     bigint_expand(out, size);
-    out->data[size - 1] |= 1llu << (index & 63);
-    out->size = size;
+    out->data[size - 1] |= 1llu << (index & (BIGINT_VALUE_BITS - 1llu));
+    if(size > out->size){
+        out->size = size;
+    }
+}
+void bigint_unsetbit(bigint_value_t index, bigint_t* out) {
+    bigint_size_t size = (bigint_size_t)(index / BIGINT_VALUE_BITS + 1llu);
+    bigint_expand(out, size);
+    out->data[size - 1] &= ~(1llu << (index & (BIGINT_VALUE_BITS - 1llu)));
+    if(size > out->size){
+        out->size = size;
+    }
+}
+void bigint_togglebit(bigint_value_t index, bigint_t* out) {
+    bigint_size_t size = (bigint_size_t)(index / BIGINT_VALUE_BITS + 1llu);
+    bigint_expand(out, size);
+    out->data[size - 1] ^= 1llu << (index & (BIGINT_VALUE_BITS - 1llu));
+    if(size > out->size){
+        out->size = size;
+    }
 }
 
 void bigint_log2(const bigint_t num, bigint_t* out) {
@@ -964,14 +981,7 @@ void bigint_log2(const bigint_t num, bigint_t* out) {
     out->negative = false;
 
     bigint_value_t val = bigint_bit_length(num);
-    if(val == 0) {
-        out->size = 0;
-        return;
-    }
-
-    bigint_expand(out, 1);
-    out->data[0] = val;
-    out->size = 1;
+    bigint_from_uint(val, out);
 }
 
 int bigint_gcd(const bigint_t num1, const bigint_t num2, bigint_t* UNIQUE(out)) {
@@ -1213,7 +1223,7 @@ void bigint_from_uint(uint64_t num, bigint_t* out) {
     out->size = 1;
     out->data[0] = num;
 
-    bigint_shrink(out);
+    //bigint_shrink(out);
 }
 void bigint_from_int(int64_t num, bigint_t* out) {
     if(!out) {
@@ -1236,7 +1246,7 @@ void bigint_from_int(int64_t num, bigint_t* out) {
         out->negative = false;
     }
 
-    bigint_shrink(out);
+    //bigint_shrink(out);
 }
 
 inline bigint_value_t bigint_to_uint(const bigint_t num) {
@@ -1289,12 +1299,12 @@ void bigint_from_string_dec_(char* str, bigint_t* out) {
         str++;
     }
 
-    bigint_size_t dec_len = calc_x_len(str, isdigit); // allocate hex size just to be sure
+    bigint_size_t dec_len = calc_x_len(str, isdigit);
     if(dec_len == 0) {
         bigint_from_int(0, out);
         return;
     }
-    dec_len = (dec_len - 1u) / 19u + 1u;
+    dec_len = (dec_len - 1u) / 19u + 1u; // convert hex len to enough for base10
     bigint_expand(out, dec_len);
 
     bigint_value_t ten = 10, num_data = 0;
@@ -1340,7 +1350,7 @@ void bigint_from_string_hex_(char* str, bigint_t* out) {
         tmp = (bigint_value_t)hexchar_to_int(str[hex_len - i]) << shift;
         out->data[index] += tmp;
         out->size = index + 1;
-        shift = (shift + 4) % 64;
+        shift = (shift + 4) & (BIGINT_VALUE_BITS - 1llu);
         index += shift == 0;
     }
 }
@@ -1476,6 +1486,7 @@ static bigint_value_t bigint_fprint_hex_(const bigint_t num, FILE* stream, int f
 
     if(flag & BI_ADD0X) {
         written += fprintf(stream, large_letters ? "0X" : "0x");
+
     }
 
     if(num.size == 0) {

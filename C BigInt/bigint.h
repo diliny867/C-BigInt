@@ -120,7 +120,9 @@ void bigint_inv(const bigint_t num, bigint_t* out);
 bool bigint_fits_int(const bigint_t num, bool is_signed);
 
 bigint_value_t bigint_bit_length(const bigint_t num); // is also log2 of num
-void bigint_setbit(bigint_t* out, bigint_value_t index);
+void bigint_setbit(bigint_value_t index, bigint_t* out);
+void bigint_unsetbit(bigint_value_t index, bigint_t* out);
+void bigint_togglebit(bigint_value_t index, bigint_t* out);
 
 void bigint_from_uint(uint64_t num, bigint_t* out);
 void bigint_from_int(int64_t num, bigint_t* out);
