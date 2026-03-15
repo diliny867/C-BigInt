@@ -9,11 +9,6 @@
 #include <math.h>
 
 
-static const bigint_t bigint_zero = {0, 0, 0, 0};
-static const bigint_value_t one___ = 1;
-static const bigint_t bigint_one = {&one___, 1, 1, 0};
-
-
 #ifndef _MSC_VER
 
 #define max(a,b) (((a) > (b)) ? (a) : (b))
@@ -737,7 +732,7 @@ int bigint_mod(const bigint_t num1, const bigint_t num2, bigint_t* UNIQUE(out)) 
 }
 
 // https://stackoverflow.com/questions/4407839/how-can-i-find-the-square-root-of-a-java-biginteger
-int bigint_sqrt(const bigint_t num, bigint_t* UNIQUE(out), bool ceil) {
+int bigint_sqrt(const bigint_t num, bool ceil, bigint_t* UNIQUE(out)) {
     if(!out) { // cant do the thing
         return 2;
     }
@@ -748,12 +743,12 @@ int bigint_sqrt(const bigint_t num, bigint_t* UNIQUE(out), bool ceil) {
 
     out->negative = false;
 
-    int cmp = bigint_cmp(num, bigint_zero);
-    if(cmp < 0) {
-        return 1;
-    }else if(cmp == 0) {
+    if(num.size == 0) {
         out->size = 0;
         return 0;
+    }
+    if(num.negative) {
+        return 1;
     }
 
 #ifdef BIGINT_NO_UNIQUE
@@ -792,7 +787,7 @@ int bigint_sqrt(const bigint_t num, bigint_t* UNIQUE(out), bool ceil) {
             if(ceil){
                 bigint_mul(tmp1, tmp1, &tmp2);
                 if(bigint_lesser(tmp2, num)) {
-                    bigint_add(tmp1, bigint_one, &tmp1);
+                    bigint_inc(tmp1, &tmp1);
                 }
             }
 
@@ -819,32 +814,35 @@ int bigint_sqrt(const bigint_t num, bigint_t* UNIQUE(out), bool ceil) {
 }
 
 //https://stackoverflow.com/questions/101439/the-most-efficient-way-to-implement-an-integer-based-power-function-powint-int
-void bigint_pow(const bigint_t num1, const bigint_t num2, bigint_t* UNIQUE(out)) {
+int bigint_pow(const bigint_t num1, const bigint_t num2, bigint_t* UNIQUE(out)) {
     if(!out) {
-        return;
+        return 0;
     }
 
 #ifndef BIGINT_NO_UNIQUE
     assert(num1.data != out->data && num2.data != out->data);
 #endif
 
-
-    int cmp = bigint_abscmp(num1, bigint_one);
-    if(cmp < 0) { // zero
-        bigint_from_uint(0, out);
-        return;
-    }else if(cmp == 0) { //one
-        bigint_from_uint(1, out);
-        return;
+    if(num2.negative) {
+        return 1;
     }
 
-    cmp = bigint_abscmp(num2, bigint_one);
+    int cmp = bigint_abscmp_uint(num1, 1);
+    if(cmp < 0) { // zero
+        bigint_from_uint(0, out);
+        return 0;
+    }else if(cmp == 0) { //one
+        bigint_from_uint(1, out);
+        return 0;
+    }
+
+    cmp = bigint_abscmp_uint(num2, 1);
     if(cmp < 0) { // zero
         bigint_from_uint(1, out);
-        return;
+        return 0;
     }else if(cmp == 0) { // one
         bigint_copy(num1, out);
-        return;
+        return 0;
     }
 
 #ifdef BIGINT_NO_UNIQUE
@@ -895,11 +893,13 @@ void bigint_pow(const bigint_t num1, const bigint_t num2, bigint_t* UNIQUE(out))
 #endif
 
     bigint_shrink(out);
+
+    return 0;
 }
 
 
 // https://proofwiki.org/wiki/Number_of_Digits_in_Factorial
-static bigint_size_t factorial_digits(const bigint_t num) {
+static bigint_value_t factorial_digits(const bigint_t num) {
     if(bigint_abscmp_uint(num, 1) <= 0) { // 0 or 1
         return 1;
     }
@@ -1158,9 +1158,12 @@ bool bigint_eq_uint(const bigint_t num1, bigint_value_t num2){
     }
     return num1.size == 1 && num1.data[0] == num2;
 }
-bool bigint_abscmp_uint(const bigint_t num1, bigint_value_t num2){
+int bigint_abscmp_uint(const bigint_t num1, bigint_value_t num2){
     if(num2 == 0){
-        return bigint_is_zero(num1);
+        return num1.size != 0;
+    }
+    if(num1.size == 0) {
+        return -(num2 != 0);
     }
     if(num1.size > 1){
         return 1;
@@ -1174,6 +1177,15 @@ bool bigint_abscmp_uint(const bigint_t num1, bigint_value_t num2){
 
     return -1;
 }
+int bigint_cmp_int(const bigint_t num1, bigint_ivalue_t num2) {
+    bool negative2 = num2 < 0;
+    if(num1.negative != negative2) {
+        return num1.negative ? -1 : 1;
+    }
+    int abscmp = bigint_abscmp_uint(num1, llabs(num2));
+    return num1.negative ? -abscmp : abscmp;
+}
+
 
 #define copy_choose(num1, num2, out, i, max_size)            \
     memmove(out->data + i,                                   \
@@ -1298,11 +1310,10 @@ inline bigint_ivalue_t bigint_to_int(const bigint_t num) {
         return 0;
     }
 
-    bigint_value_t res = num.data[0];
-    if(num.negative) {
-        return res > INT64_MAX ? INT64_MIN : -((bigint_ivalue_t)res);
-    }
-    return res > INT64_MAX ? INT64_MAX : (bigint_ivalue_t)res;
+    bigint_value_t val = num.data[0];
+    // dont do - on val right away so INT64_MAX + 1 becomes correct negative and larger numbers save correct eveness
+    bigint_ivalue_t ival = val > (INT64_MAX + 1llu) ? (val - (INT64_MAX + 1llu)) : val;
+    return num.negative ? -ival : ival;
 }
 
 bigint_value_t bigint_to_uint_greedy(bigint_t num) {

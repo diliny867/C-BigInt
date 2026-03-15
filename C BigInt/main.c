@@ -62,8 +62,8 @@ void test_bigints() {
 
     PRINTNUMS_ALL();
 
-    bigint_sqrt(num3, &num5, 0);
-    bigint_sqrt(num4, &num6, 0);
+    bigint_sqrt(num3, 0, &num5);
+    bigint_sqrt(num4, 0, &num6);
 
     PRINTNUMS_ALL();
 
@@ -76,7 +76,7 @@ void test_bigints() {
     bigint_mul(num3, num3, &num4);
     bigint_mul(num4, num4, &num3);
 
-    bigint_sqrt(num4, &num5, 0);
+    bigint_sqrt(num4, 0, &num5);
 
     PRINTNUMS_ALL();
 

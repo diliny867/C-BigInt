@@ -91,8 +91,8 @@ void bigint_mul(const bigint_t num1, const bigint_t num2, bigint_t* UNIQUE(out))
 int  bigint_div(const bigint_t num1, const bigint_t num2, bigint_t* UNIQUE(out), bigint_t* UNIQUE(r));
 
 int  bigint_mod(const bigint_t num1, const bigint_t num2, bigint_t* UNIQUE(out));
-int  bigint_sqrt(const bigint_t num, bigint_t* UNIQUE(out), bool ceil);
-void bigint_pow(const bigint_t num1, const bigint_t num2, bigint_t* UNIQUE(out));
+int  bigint_sqrt(const bigint_t num, bool ceil, bigint_t* UNIQUE(out));
+int  bigint_pow(const bigint_t num1, const bigint_t num2, bigint_t* UNIQUE(out));
 int  bigint_fact(const bigint_t num, bigint_t* UNIQUE(out));
 void bigint_log2(const bigint_t num, bigint_t* out); // out is always in uint64, maybe output as it and not as bigint
 int  bigint_gcd(const bigint_t num1, const bigint_t num2, bigint_t* UNIQUE(out));
@@ -107,11 +107,11 @@ bool bigint_eq(const bigint_t num1, const bigint_t num2);
 bool bigint_abseq(const bigint_t num1, const bigint_t num2);
 int bigint_abscmp(const bigint_t num1, const bigint_t num2);
 int bigint_cmp(const bigint_t num1, const bigint_t num2);
-//bool bigint_is_zero(const bigint_t num);
 #define bigint_is_zero(num) ((num).size == 0)
 
 bool bigint_eq_uint(const bigint_t num1, bigint_value_t num2);
-bool bigint_abscmp_uint(const bigint_t num1, bigint_value_t num2);
+int bigint_abscmp_uint(const bigint_t num1, bigint_value_t num2);
+int bigint_cmp_int(const bigint_t num1, bigint_ivalue_t num2);
 
 void bigint_or(const bigint_t num1, const bigint_t num2, bigint_t* out);
 void bigint_and(const bigint_t num1, const bigint_t num2, bigint_t* out);
