@@ -1159,9 +1159,6 @@ bool bigint_eq_uint(const bigint_t num1, bigint_value_t num2){
     return num1.size == 1 && num1.data[0] == num2;
 }
 int bigint_abscmp_uint(const bigint_t num1, bigint_value_t num2){
-    if(num2 == 0){
-        return num1.size != 0;
-    }
     if(num1.size == 0) {
         return -(num2 != 0);
     }
@@ -1255,7 +1252,7 @@ static inline int hexchar_to_int(char c) {
     return 0;
 }
 
-void bigint_from_uint(uint64_t num, bigint_t* out) {
+void bigint_from_uint(bigint_value_t num, bigint_t* out) {
     if(!out) {
         return;
     }
@@ -1274,7 +1271,7 @@ void bigint_from_uint(uint64_t num, bigint_t* out) {
 
     //bigint_shrink(out);
 }
-void bigint_from_int(int64_t num, bigint_t* out) {
+void bigint_from_int(bigint_ivalue_t num, bigint_t* out) {
     if(!out) {
         return;
     }
@@ -1288,7 +1285,7 @@ void bigint_from_int(int64_t num, bigint_t* out) {
     out->size = 1;
 
     if(num < 0) {
-        out->data[0] = (uint64_t)(-num);
+        out->data[0] = (bigint_ivalue_t)(-num);
         out->negative = true;
     }else {
         out->data[0] = num;
@@ -1312,7 +1309,7 @@ inline bigint_ivalue_t bigint_to_int(const bigint_t num) {
 
     bigint_value_t val = num.data[0];
     // dont do - on val right away so INT64_MAX + 1 becomes correct negative and larger numbers save correct eveness
-    bigint_ivalue_t ival = val > (INT64_MAX + 1llu) ? (val - (INT64_MAX + 1llu)) : val;
+    bigint_ivalue_t ival = val > ((bigint_value_t)INT64_MAX + (bigint_value_t)!!num.negative) ? (val - (INT64_MAX + 1llu)) : val;
     return num.negative ? -ival : ival;
 }
 
@@ -1412,7 +1409,7 @@ void bigint_from_string(char* str, bigint_t* out, int flag) {
 }
 
 
-bigint_value_t div_r(bigint_value_t v, bigint_value_t d, bigint_value_t* r) {
+static inline bigint_value_t div_r(bigint_value_t v, bigint_value_t d, bigint_value_t* r) {
     bigint_value_t q = v / d;
     *r = v - q * d;
     return q;
@@ -1800,12 +1797,13 @@ static int bigintf_mul_div_(const bigintf_t num1, const bigintf_t num2, bigintf_
 
     if(div){
         if(bigint_eq_uint(num2.numerator, 0)) {
+            bigint_from_uint(0, &out->denominator);
+            bigint_mul(num1.numerator, num2.denominator, &out->numerator);
             return 1;
         }
 
         if(bigintf_abseq(num1, num2)){
-            bigint_from_uint(1, &out->numerator);
-            bigint_from_uint(1, &out->denominator);
+            bigintf_from_uint(1, 1, out);
             return 0;
         }
     }
@@ -1824,17 +1822,9 @@ static int bigintf_mul_div_(const bigintf_t num1, const bigintf_t num2, bigintf_
 }
 
 void bigintf_mul(const bigintf_t num1, const bigintf_t num2, bigintf_t* UNIQUE(out)){
-    if(!out) {
-        return;
-    }
-
     bigintf_mul_div_(num1, num2, out, 0);
 }
 int bigintf_div(const bigintf_t num1, const bigintf_t num2, bigintf_t* UNIQUE(out)){
-    if(!out) {
-        return 2;
-    }
-
     return bigintf_mul_div_(num1, num2, out, 1);
 }
 
@@ -1867,7 +1857,7 @@ void bigintf_from_uint(uint64_t num, uint64_t den, bigintf_t* out) {
 
     bigintf_simplify(out);
 }
-void bigintf_from_int(uint64_t num, uint64_t den,bigintf_t* out) {
+void bigintf_from_int(int64_t num, int64_t den, bigintf_t* out) {
     if(!out) {
         return;
     }
@@ -1894,11 +1884,17 @@ void bigintf_from_f64(double num, bigintf_t* out) {
     char buf[DOUBLE_BUF_SIZE];
     //char buf_exp10[DOUBLE_BUF_SIZE];
 
-    snprintf(buf, DOUBLE_BUF_SIZE, "%.*f", DOUBLE_DIGITS, num);
+    snprintf2(buf, DOUBLE_BUF_SIZE, "%.*f", DOUBLE_DIGITS, num);
 
     int negative = 0;
     if(buf[0] == '-') {
         negative = 1;
+    }
+
+    if(strncmp(buf + negative, "inf", 3) == 0) {
+        bigintf_from_uint(1, 0, out);
+        out->numerator.negative = negative;
+        return;
     }
 
     int whole = calc_x_len(buf + negative, isdigit);
@@ -1913,7 +1909,6 @@ void bigintf_from_f64(double num, bigintf_t* out) {
     memmove(buf + negative + whole, buf + negative + whole + 1, decimal); // copy to eliminate .
     buf[negative + whole + decimal] = '\0'; // add terminator
 
-    bigintf_init(out);
     bigint_from_string(buf, &out->numerator, 0);
     //bigint_from_string(buf_exp10, &out->denominator);
     bigint_from_uint(int_pow10(decimal), &out->denominator);
@@ -1921,6 +1916,11 @@ void bigintf_from_f64(double num, bigintf_t* out) {
     out->numerator.negative = negative;
 
     bigintf_simplify(out);
+}
+
+void bigintf_from_string(char* str1, char* str2, bigint_t* out1, bigint_t* out2, int flag) {
+    bigint_from_string(str1, out1, flag);
+    bigint_from_string(str2, out2, flag);
 }
 
 
@@ -1940,8 +1940,16 @@ bigint_value_t bigintf_to_string(const bigintf_t num, char* out, bigint_value_t 
 
     if(!(flag & BIF_AS_DECIMAL)) {
         written += bigint_to_string(num.numerator, out,  max_size, 0);
-        written += snprintf(out + written, max_size - written, " / ");
+        written += snprintf2(out + written, max_size - written, " / ");
         written += bigint_to_string(num.denominator, out + written, max_size - written, 0);
+        return written;
+    }
+
+    if(bigint_eq_uint(num.denominator, 0)) {
+        if(num.numerator.negative) {
+            written += snprintf2(out + written, max_size - written, "-");
+        }
+        written += snprintf2(out + written, max_size - written, "inf");
         return written;
     }
 
@@ -1957,7 +1965,7 @@ bigint_value_t bigintf_to_string(const bigintf_t num, char* out, bigint_value_t 
     assert(!num.denominator.negative);
 
     if(num.numerator.negative) {
-        written += snprintf(out + written, max_size - written, "-");
+        written += snprintf2(out + written, max_size - written, "-");
     }
 
     bigint_div(nr, num.denominator, &q, &r);
@@ -1969,7 +1977,7 @@ bigint_value_t bigintf_to_string(const bigintf_t num, char* out, bigint_value_t 
         return written;
     }
 
-    written += snprintf(out + written, max_size - written, ".");
+    written += snprintf2(out + written, max_size - written, ".");
 
     bigint_copy(r, &nr);
 
@@ -2011,6 +2019,14 @@ bigint_value_t bigintf_fprint(const bigintf_t num, FILE* stream, bigint_value_t 
         written += bigint_fprint(num.numerator, stream, flag);
         written += fprintf(stream, " / ");
         written += bigint_fprint(num.denominator, stream, flag);
+        return written;
+    }
+
+    if(bigint_eq_uint(num.denominator, 0)) {
+        if(num.numerator.negative) {
+            written += fprintf(stream, "-");
+        }
+        written += fprintf(stream, "inf");
         return written;
     }
 

@@ -125,8 +125,8 @@ void bigint_setbit(bigint_value_t index, bigint_t* out);
 void bigint_unsetbit(bigint_value_t index, bigint_t* out);
 void bigint_togglebit(bigint_value_t index, bigint_t* out);
 
-void bigint_from_uint(uint64_t num, bigint_t* out);
-void bigint_from_int(int64_t num, bigint_t* out);
+void bigint_from_uint(bigint_value_t num, bigint_t* out);
+void bigint_from_int(bigint_ivalue_t num, bigint_t* out);
 
 bigint_value_t bigint_to_uint(const bigint_t num);
 bigint_ivalue_t bigint_to_int(const bigint_t num);
@@ -174,9 +174,11 @@ int  bigintf_div(const bigintf_t num1, const bigintf_t num2, bigintf_t* UNIQUE(o
 void bigintf_from_bigint(const bigint_t num, bigintf_t* out);
 void bigintf_from_bigints(const bigint_t num, bigint_t den, bigintf_t* out);
 
-void bigintf_from_uint(const uint64_t num, const uint64_t den, bigintf_t* out);
-void bigintf_from_int(const uint64_t num, const uint64_t den,bigintf_t* out);
+void bigintf_from_uint(const bigint_value_t num, const bigint_value_t den, bigintf_t* out);
+void bigintf_from_int(const bigint_ivalue_t num, const bigint_ivalue_t den, bigintf_t* out);
 void bigintf_from_f64(const double num, bigintf_t* out);
+
+void bigintf_from_string(char* str1, char* str2, bigint_t* out1, bigint_t* out2, int flag);
 
 double bigintf_to_f64(const bigintf_t num);
 bigint_value_t bigintf_to_string(const bigintf_t num, char* out, bigint_value_t max_size, bigint_value_t fraction_max, int flag);
