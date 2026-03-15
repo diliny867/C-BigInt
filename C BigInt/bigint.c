@@ -518,7 +518,7 @@ void bigint_mul(const bigint_t num1, const bigint_t num2, bigint_t* UNIQUE(out))
 }
 
 
-// https://www.codeproject.com/Articles/1276311/Multiple-Precision-Arithmetic-Division-Algorithm
+// https://web.archive.org/web/20241113212741/https://www.codeproject.com/Articles/1276311/Multiple-Precision-Arithmetic-Division-Algorithm
 static void bigint_div_(bigint_value_t* data1, bigint_size_t size1, bigint_value_t* data2, bigint_size_t size2, 
                         bigint_value_t* data_q, bigint_size_t* size_q, bigint_value_t* data_r, bigint_size_t* size_r, bigint_value_t* data_tmp) { // assumes num1 > num2
     bigint_value_t qi, ai_left;
@@ -859,9 +859,10 @@ int bigint_pow(const bigint_t num1, const bigint_t num2, bigint_t* UNIQUE(out)) 
     out->size = 1;
 
     bigint_t tmp, base, exp;
-    bigint_init_n(&tmp, out->size);
-    bigint_init_n(&base, out->size);
-    bigint_init_n(&exp, num1.size);
+    bigint_value_t* tmp_alloc = bigint_alloc((out->size + out->size + num1.size) * sizeof(bigint_value_t));
+    bigint_init_from(&tmp,  tmp_alloc,                                0, out->size);
+    bigint_init_from(&base, tmp_alloc + tmp.capacity,                 0, out->size);
+    bigint_init_from(&exp,  tmp_alloc + tmp.capacity + base.capacity, 0, num1.size);
 
     bigint_copy(num1, &base);
     bigint_copy(num2, &exp);
@@ -882,9 +883,7 @@ int bigint_pow(const bigint_t num1, const bigint_t num2, bigint_t* UNIQUE(out)) 
         bigint_copy(tmp, &base);
     }
 
-    bigint_destroy(&tmp);
-    bigint_destroy(&base);
-    bigint_destroy(&exp);
+    bigint_free(tmp_alloc);
 
 #ifdef BIGINT_NO_UNIQUE
     bigint_copy(*out, bigint_old_out__);
@@ -951,8 +950,9 @@ int bigint_fact(const bigint_t num, bigint_t* UNIQUE(out)) {
 
     bigint_size_t size = factorial_digits(num);
     bigint_t counter, tmp;
-    bigint_init_n(&counter, num.size);
-    bigint_init_n(&tmp, size);
+    bigint_value_t* tmp_alloc = bigint_alloc((num.size + size) * sizeof(bigint_value_t));
+    bigint_init_from(&counter, tmp_alloc,                    0, num.size);
+    bigint_init_from(&tmp    , tmp_alloc + counter.capacity, 0, size);
     bigint_copy(num, &counter);
 
     bigint_expand(out, size);
@@ -965,6 +965,8 @@ int bigint_fact(const bigint_t num, bigint_t* UNIQUE(out)) {
 
         bigint_dec(counter, &counter);
     }
+
+    bigint_free(tmp_alloc);
 
 #ifdef BIGINT_NO_UNIQUE
     bigint_copy(*out, bigint_old_out__);
@@ -1065,13 +1067,13 @@ int bigint_gcd(const bigint_t num1, const bigint_t num2, bigint_t* UNIQUE(out)) 
         bigint_copy(*out, &tmp1);
     }
 
+    bigint_free(tmp_alloc);
+
 #ifdef BIGINT_NO_UNIQUE
     bigint_copy(*out, bigint_old_out__);
     bigint_destroy(out);
     out = bigint_old_out__;
 #endif
-
-    bigint_free(tmp_alloc);
 
     out->negative = false;
 
@@ -1354,7 +1356,7 @@ void bigint_from_string_dec_(char* str, bigint_t* out) {
 
     bigint_value_t ten = 10, num_data = 0;
     bigint_t d, tmp, bignum;
-    bigint_init_from(&d, &ten, 1, 1);
+    bigint_init_from(&d,      &ten,      1, 1);
     bigint_init_from(&bignum, &num_data, 1, 1);
     bigint_init_n(&tmp, dec_len);
 
@@ -1444,9 +1446,9 @@ static bigint_value_t bigint_to_string_dec_(const bigint_t num, char* out, bigin
     bigint_t d, bignum, tmp1, tmp2;
     bigint_init_from(&d, &divisor, 1, 1);
     bigint_value_t* tmp_alloc = bigint_alloc((num.size + 1 + num.size + 1 + num.size + 1) * sizeof(bigint_value_t));
-    bigint_init_from(&bignum, tmp_alloc,                               0, num.size + 1);
-    bigint_init_from(&tmp1,   tmp_alloc + 1 + num.size,                0, num.size + 1);
-    bigint_init_from(&tmp2,   tmp_alloc + 1 + num.size + 1 + num.size, 0, num.size + 1);
+    bigint_init_from(&bignum, tmp_alloc,                                   0, num.size + 1);
+    bigint_init_from(&tmp1,   tmp_alloc + bignum.capacity,                 0, num.size + 1);
+    bigint_init_from(&tmp2,   tmp_alloc + bignum.capacity + tmp1.capacity, 0, num.size + 1);
     bigint_copy(num, &tmp1);
     tmp1.negative = false;
 
@@ -1568,9 +1570,9 @@ static bigint_value_t bigint_fprint_dec_(const bigint_t num, FILE* stream, int f
     bigint_size_t buf_size = num.size * 20 + 1;
     bigint_init_from(&d, &divisor, 1, 1);
     bigint_value_t* tmp_alloc = bigint_alloc((size + size + size) * sizeof(bigint_value_t) + buf_size * sizeof(char));
-    bigint_init_from(&bignum, tmp_alloc,               0, size);
-    bigint_init_from(&tmp1,   tmp_alloc + size,        0, size);
-    bigint_init_from(&tmp2,   tmp_alloc + size + size, 0, size);
+    bigint_init_from(&bignum, tmp_alloc,                                   0, size);
+    bigint_init_from(&tmp1,   tmp_alloc + bignum.capacity,                 0, size);
+    bigint_init_from(&tmp2,   tmp_alloc + bignum.capacity + tmp1.capacity, 0, size);
     bigint_copy(num, &tmp1);
     tmp1.negative = false;
 
@@ -1675,8 +1677,8 @@ int bigintf_abscmp(const bigintf_t num1, const bigintf_t num2) {
 
     bigint_value_t* tmp_alloc = bigint_alloc((size1 + size2) * sizeof(bigint_value_t));
     bigint_t tmp1, tmp2;
-    bigint_init_from(&tmp1, tmp_alloc, 0, size1);
-    bigint_init_from(&tmp2, tmp_alloc, 0, size2);
+    bigint_init_from(&tmp1, tmp_alloc,                 0, size1);
+    bigint_init_from(&tmp2, tmp_alloc + tmp1.capacity, 0, size2);
 
     bigint_mul(num1.numerator, num2.denominator, &tmp1);
     bigint_mul(num2.numerator, num1.denominator, &tmp2);
@@ -1727,9 +1729,9 @@ void bigintf_simplify(bigintf_t* num){
     bigint_size_t size = max(num->numerator.size, num->denominator.size) + 1;
     bigint_t gcd, r, tmp;
     bigint_value_t* tmp_alloc = bigint_alloc((size + size + size) * sizeof(bigint_value_t));
-    bigint_init_from(&gcd, tmp_alloc,               0, size);
-    bigint_init_from(&r,   tmp_alloc + size,        0, size);
-    bigint_init_from(&tmp, tmp_alloc + size + size, 0, size);
+    bigint_init_from(&gcd, tmp_alloc,                             0, size);
+    bigint_init_from(&r,   tmp_alloc + gcd.capacity,              0, size);
+    bigint_init_from(&tmp, tmp_alloc + gcd.capacity + r.capacity, 0, size);
 
     bigint_gcd(num->numerator, num->denominator, &gcd);
 
