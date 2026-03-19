@@ -11,9 +11,6 @@
 
 #ifndef _MSC_VER
 
-#define max(a,b) (((a) > (b)) ? (a) : (b))
-#define min(a,b) (((a) < (b)) ? (a) : (b))
-
 static inline uint8_t subborrow(uint8_t borrow, uint64_t num1, uint64_t num2, uint64_t *out){
     uint64_t tmp = num1 - num2;
     *out = tmp - borrow;
@@ -39,7 +36,8 @@ static inline uint64_t udiv(uint64_t hi, uint64_t lo, uint64_t divisor, uint64_t
 }
 //#define udiv(num1_lo, num1_hi, num2, r) _udiv128_((num1_lo), (num1_hi), (num2), (r))
 
-#define msb_zeros(val) __builtin_clzll(val)
+#define msb_zeros(val)   __builtin_clzll(val)
+#define msb_zeros32(val) __builtin_clz(val)
 
 #else
 
@@ -52,9 +50,11 @@ static inline uint64_t udiv(uint64_t hi, uint64_t lo, uint64_t divisor, uint64_t
 
 #define udiv(num1_hi, num1_lo, num2, r) _udiv128((num1_hi), (num1_lo), (num2), (r))
 
-#define msb_zeros(val) __lzcnt64(val)
+#define msb_zeros(val)   __lzcnt64(val)
+#define msb_zeros32(val) __lzcnt(val)
 
 #endif
+
 
 // snprintf that returns actually written characters count
 static inline int snprintf2(char *buf, size_t size, char *format, ...){
@@ -69,6 +69,9 @@ static inline int snprintf2(char *buf, size_t size, char *format, ...){
 }
 
 
+#define maxv(a,b) (((a) > (b)) ? (a) : (b))
+#define minv(a,b) (((a) < (b)) ? (a) : (b))
+
 #define arr_zero(arr, size) memset(arr, 0, size)
 
 #define arr_reverse(T, arr, size)                \
@@ -82,10 +85,12 @@ static inline int snprintf2(char *buf, size_t size, char *format, ...){
     } while(0)
 
 
+#define next_pow2(size)      (1u << (32u - msb_zeros32((size) - 1)))
+
 #ifdef BIGINT_POW2_GROW
 // no need for  (size) > 0x80000000 ? 0xFFFFFFFF : (1u << (32u - _lzcnt_u32((size) - 1)))
 // because _lzcnt_u32 cant return 0 because size is 31 bit, so atleast 1
-# define calc_capacity(size) (1u << (32u - _lzcnt_u32((size) - 1)))
+# define calc_capacity(size) next_pow2(size)
 #else
 # define calc_capacity(size) (size)
 #endif
@@ -106,6 +111,9 @@ void bigint_expand(bigint_t* num, bigint_size_t target) {
         }
         bigint_zero_data(num->data + num->size, num->capacity - num->size); // always zero added
     }
+}
+void bigint_expand_pow2(bigint_t* num, bigint_size_t target) {
+    bigint_expand(num, next_pow2(target));
 }
 
 static bigint_size_t bigint_shrink_(bigint_value_t* data, bigint_size_t size) {
@@ -134,21 +142,33 @@ void bigint_destroy(bigint_t* num) {
 }
 
 void bigint_init_n(bigint_t* num, bigint_size_t n) {
-    num->data = bigint_alloc(n * sizeof(bigint_value_t));
-    num->size = 0;
     num->capacity = calc_capacity(n);
-    bigint_zero_data(num->data, num->size);
+    num->data = bigint_alloc(num->capacity * sizeof(bigint_value_t));
+    bigint_zero_data(num->data, num->capacity);
+    num->size = 0;
     num->negative = false;
     //arr_zero(num->data, sizeof(bigint_value_t) * n);
 }
 void bigint_init(bigint_t* num) {
     bigint_init_n(num, BIGINT_DEFAULT_INIT_WORD_COUNT);
 }
-void bigint_init_from(bigint_t* num, bigint_value_t* data, bigint_size_t size, bigint_size_t capacity){
+void bigint_init_from0(bigint_t* num, bigint_value_t* data, bigint_size_t size, bigint_size_t capacity, bool negative){
     num->data = data;
     num->size = size;
     num->capacity = capacity;
-    num->negative = false;
+    num->negative = negative;
+}
+void bigint_init_from(bigint_t* num, bigint_value_t* data, bigint_size_t size, bigint_size_t capacity){
+    bigint_init_from0(num, data, size, capacity, false);
+}
+
+void bigint_init_from_uint(bigint_t* out, bigint_value_t num) {
+    bigint_init_n(out, 1);
+    bigint_from_uint(num, out);
+}
+void bigint_init_from_int(bigint_t* out, bigint_ivalue_t num) {
+    bigint_init_n(out, 1);
+    bigint_from_uint(num, out);
 }
 
 
@@ -262,10 +282,12 @@ void bigint_srshift(const bigint_t num, bigint_value_t shift, bigint_t* out) {
 
     bigint_expand(out, num.size - offset);
 
-    out->size = bigint_rshift_(num.data, num.size, local_shift, offset, out->data);
+    bigint_size_t new_size = bigint_rshift_(num.data, num.size, local_shift, offset, out->data);
 
     if(num.negative && (num.data[num.size] & 0x8000000000000000)){
         bigint_srshift_fill1_(num.size, local_shift, offset, out->data);
+    }else {
+        out->size = new_size;
     }
 }
 
@@ -273,7 +295,7 @@ void bigint_srshift(const bigint_t num, bigint_value_t shift, bigint_t* out) {
 static bigint_size_t bigint_add_(bigint_value_t* data1, bigint_size_t size1, bigint_value_t* data2, bigint_size_t size2, bigint_value_t* data_out) { //ignores negatives
     bigint_size_t i;
     uint8_t carry = 0;
-    bigint_size_t min_size = min(size1, size2);
+    bigint_size_t min_size = minv(size1, size2);
     for(i = 0; i < min_size; i++) {
         carry = addcarry(carry, data1[i], data2[i], data_out + i);
     }
@@ -307,7 +329,7 @@ static bigint_size_t bigint_add_(bigint_value_t* data1, bigint_size_t size1, big
 static bigint_size_t bigint_sub_(bigint_value_t* data1, bigint_size_t size1, bigint_value_t* data2, bigint_size_t size2, bigint_value_t* data_out) { //ignores negatives; num1 >= num2
     bigint_size_t i;
     uint8_t borrow = 0;
-    bigint_size_t min_size = min(size1, size2);
+    bigint_size_t min_size = minv(size1, size2);
     for(i = 0; i < min_size; i++) {
         borrow = subborrow(borrow, data1[i], data2[i], data_out + i);
     }
@@ -339,7 +361,7 @@ void bigint_add(const bigint_t num1, const bigint_t num2, bigint_t* out) {
         return;
     }
 
-    bigint_expand(out, max(num1.size, num2.size) + 1);
+    bigint_expand(out, maxv(num1.size, num2.size) + 1);
     if(num1.negative != num2.negative) {
         if(bigint_lesser(num1, num2)) {
             out->size = bigint_sub_(num2.data, num2.size, num1.data, num1.size, out->data);
@@ -360,7 +382,7 @@ void bigint_sub(const bigint_t num1, const bigint_t num2, bigint_t* out) {
         return;
     }
 
-    bigint_expand(out, max(num1.size, num2.size));
+    bigint_expand(out, maxv(num1.size, num2.size));
     if(num1.negative != num2.negative) {
         out->size = bigint_add_(num1.data, num1.size, num2.data, num2.size, out->data);
         out->negative = num1.negative;
@@ -377,7 +399,7 @@ void bigint_sub(const bigint_t num1, const bigint_t num2, bigint_t* out) {
 }
 
 
-static bigint_size_t bigint_inc_(bigint_value_t* data, bigint_size_t size, bigint_value_t* data_out) {
+static inline bigint_size_t bigint_inc_(bigint_value_t* data, bigint_size_t size, bigint_value_t* data_out) {
     bigint_value_t carry = 1;
     for(bigint_size_t i = 0; i < size && carry; i++) {
         data_out[i] = data[i] + carry;
@@ -391,7 +413,7 @@ static bigint_size_t bigint_inc_(bigint_value_t* data, bigint_size_t size, bigin
 
     return size;
 }
-static bigint_size_t bigint_dec_(bigint_value_t* data, bigint_size_t size, bigint_value_t* data_out) {
+static inline bigint_size_t bigint_dec_(bigint_value_t* data, bigint_size_t size, bigint_value_t* data_out) {
     bigint_value_t carry = 1;
     for(bigint_size_t i = 0; i < size && carry; i++) {
         data_out[i] = data[i] - carry;
@@ -413,8 +435,11 @@ void bigint_inc(const bigint_t num, bigint_t* out) {
 
     if(bigint_is_zero(*out)) {
         bigint_from_uint(1, out);
+        // out->negative = false;
         return;
     }
+
+    out->negative = num.negative;
 
     if(num.negative) {
         bigint_expand(out, num.size);
@@ -431,10 +456,12 @@ void bigint_dec(const bigint_t num, bigint_t* out) {
     }
 
     if(bigint_is_zero(*out)) {
-        bigint_from_uint(1, out);
-        out->negative = true;
+        bigint_from_int(-1, out);
+        // out->negative = true;
         return;
     }
+
+    out->negative = num.negative;
 
     if(num.negative) {
         bigint_expand(out, num.size + 1);
@@ -448,7 +475,7 @@ void bigint_dec(const bigint_t num, bigint_t* out) {
 
 
 // https://web.archive.org/web/20241114101556/https://www.codeproject.com/Articles/1276310/Multiple-Precision-Arithmetic-1st-Multiplication-Algorithm
-static bigint_size_t bigint_mul_(bigint_value_t* data1, bigint_size_t size1, bigint_value_t* data2, bigint_size_t size2, bigint_value_t* data_out) { //ignores negatives
+static inline bigint_size_t bigint_mul_(bigint_value_t* data1, bigint_size_t size1, bigint_value_t* data2, bigint_size_t size2, bigint_value_t* data_out) { //ignores negatives
     arr_zero(data_out, (size1 + size2) * sizeof(bigint_value_t));
 
     bigint_value_t high, low;
@@ -519,7 +546,7 @@ void bigint_mul(const bigint_t num1, const bigint_t num2, bigint_t* UNIQUE(out))
 
 
 // https://web.archive.org/web/20241113212741/https://www.codeproject.com/Articles/1276311/Multiple-Precision-Arithmetic-Division-Algorithm
-static void bigint_div_(bigint_value_t* data1, bigint_size_t size1, bigint_value_t* data2, bigint_size_t size2, 
+static inline void bigint_div_(bigint_value_t* data1, bigint_size_t size1, bigint_value_t* data2, bigint_size_t size2, 
                         bigint_value_t* data_q, bigint_size_t* size_q, bigint_value_t* data_r, bigint_size_t* size_r, bigint_value_t* data_tmp) { // assumes num1 > num2
     bigint_value_t qi, ai_left;
     bigint_value_t b_left = data2[size2 - 1];
@@ -853,19 +880,19 @@ int bigint_pow(const bigint_t num1, const bigint_t num2, bigint_t* UNIQUE(out)) 
     bigint_init(out);
 #endif
 
-    bigint_expand(out, num1.size * bigint_to_uint_greedy(num2)); // yeah it grows quickly
+    bigint_t tmp, base, exp;
+    size_t out_size = num1.size * bigint_to_uint_greedy(num2); // yeah it grows quickly
+    bigint_value_t* tmp_alloc = bigint_alloc((out_size + out_size + num1.size) * sizeof(bigint_value_t));
+    bigint_init_from(&tmp,  tmp_alloc,                                0, out_size);
+    bigint_init_from(&base, tmp_alloc + tmp.capacity,                 0, out_size);
+    bigint_init_from(&exp,  tmp_alloc + tmp.capacity + base.capacity, 0, num1.size);
+
+    bigint_expand(out, out_size);
+    bigint_copy(num1, &base);
+    bigint_copy(num2, &exp);
 
     out->data[0] = 1;
     out->size = 1;
-
-    bigint_t tmp, base, exp;
-    bigint_value_t* tmp_alloc = bigint_alloc((out->size + out->size + num1.size) * sizeof(bigint_value_t));
-    bigint_init_from(&tmp,  tmp_alloc,                                0, out->size);
-    bigint_init_from(&base, tmp_alloc + tmp.capacity,                 0, out->size);
-    bigint_init_from(&exp,  tmp_alloc + tmp.capacity + base.capacity, 0, num1.size);
-
-    bigint_copy(num1, &base);
-    bigint_copy(num2, &exp);
 
     while(1) {
 
@@ -1192,8 +1219,8 @@ int bigint_cmp_int(const bigint_t num1, bigint_ivalue_t num2) {
         (max_size - i) * sizeof(bigint_value_t))
 
 void bigint_or(const bigint_t num1, const bigint_t num2, bigint_t* out) {
-    bigint_size_t min_size = min(num1.size, num2.size);
-    bigint_size_t max_size = max(num1.size, num2.size);
+    bigint_size_t min_size = minv(num1.size, num2.size);
+    bigint_size_t max_size = maxv(num1.size, num2.size);
     bigint_expand(out, max_size);
     bigint_size_t i = 0;
     for(; i < min_size; i++) {
@@ -1202,8 +1229,8 @@ void bigint_or(const bigint_t num1, const bigint_t num2, bigint_t* out) {
     copy_choose(num1, num2, out, i, max_size);
 }
 void bigint_and(const bigint_t num1, const bigint_t num2, bigint_t* out) {
-    bigint_size_t min_size = min(num1.size, num2.size);
-    bigint_size_t max_size = max(num1.size, num2.size);
+    bigint_size_t min_size = minv(num1.size, num2.size);
+    bigint_size_t max_size = maxv(num1.size, num2.size);
     bigint_expand(out, max_size);
     bigint_size_t i = 0;
     for(; i < min_size; i++) {
@@ -1212,8 +1239,8 @@ void bigint_and(const bigint_t num1, const bigint_t num2, bigint_t* out) {
     copy_choose(num1, num2, out, i, max_size);
 }
 void bigint_xor(const bigint_t num1, const bigint_t num2, bigint_t* out) {
-    bigint_size_t min_size = min(num1.size, num2.size);
-    bigint_size_t max_size = max(num1.size, num2.size);
+    bigint_size_t min_size = minv(num1.size, num2.size);
+    bigint_size_t max_size = maxv(num1.size, num2.size);
     bigint_expand(out, max_size);
     bigint_size_t i = 0;
     for(; i < min_size; i++) {
@@ -1278,7 +1305,9 @@ void bigint_from_int(bigint_ivalue_t num, bigint_t* out) {
         return;
     }
 
+
     if(num == 0) {
+        out->negative = false;
         out->size = 0;
         return;
     }
@@ -1444,11 +1473,12 @@ static bigint_value_t bigint_to_string_dec_(const bigint_t num, char* out, bigin
 
     bigint_value_t val, divisor = 1000000000000000000llu;
     bigint_t d, bignum, tmp1, tmp2;
+    bigint_size_t size = num.size + 1;
     bigint_init_from(&d, &divisor, 1, 1);
-    bigint_value_t* tmp_alloc = bigint_alloc((num.size + 1 + num.size + 1 + num.size + 1) * sizeof(bigint_value_t));
-    bigint_init_from(&bignum, tmp_alloc,                                   0, num.size + 1);
-    bigint_init_from(&tmp1,   tmp_alloc + bignum.capacity,                 0, num.size + 1);
-    bigint_init_from(&tmp2,   tmp_alloc + bignum.capacity + tmp1.capacity, 0, num.size + 1);
+    bigint_value_t* tmp_alloc = bigint_alloc((size + size + size) * sizeof(bigint_value_t));
+    bigint_init_from(&bignum, tmp_alloc,                                   0, size);
+    bigint_init_from(&tmp1,   tmp_alloc + bignum.capacity,                 0, size);
+    bigint_init_from(&tmp2,   tmp_alloc + bignum.capacity + tmp1.capacity, 0, size);
     bigint_copy(num, &tmp1);
     tmp1.negative = false;
 
@@ -1622,7 +1652,17 @@ bigint_value_t bigint_fprint(const bigint_t num, FILE* stream, int flag) {
 
 #ifndef BIGINT_NO_FRACTIONS
 
+
+// for from double conversion
+#include <float.h>
+
+#define DOUBLE_DIGITS DBL_DIG
+#define DOUBLE_BUF_SIZE (308 + DOUBLE_DIGITS + 3)
+// ~308 nines to binary to u64s
+#define DOUBLE_TO_BINWORDS_MAX (1030 / 64 + 1)
+
 #define BIGINT_FRACTION_DECIMALS_PRINT_DEFAULT 100
+
 
 void bigintf_init(bigintf_t* num){
     if(!num){
@@ -1726,7 +1766,7 @@ void bigintf_simplify(bigintf_t* num){
         return;
     }
 
-    bigint_size_t size = max(num->numerator.size, num->denominator.size) + 1;
+    bigint_size_t size = maxv(num->numerator.size, num->denominator.size) + 1;
     bigint_t gcd, r, tmp;
     bigint_value_t* tmp_alloc = bigint_alloc((size + size + size) * sizeof(bigint_value_t));
     bigint_init_from(&gcd, tmp_alloc,                             0, size);
@@ -1912,8 +1952,7 @@ void bigintf_from_f64(double num, bigintf_t* out) {
     buf[negative + whole + decimal] = '\0'; // add terminator
 
     bigint_from_string(buf, &out->numerator, 0);
-    //bigint_from_string(buf_exp10, &out->denominator);
-    bigint_from_uint(int_pow10(decimal), &out->denominator);
+    bigint_from_uint(int_pow10(decimal), &out->denominator); // decimal <= 15, so alaways fits u64
 
     out->numerator.negative = negative;
 
@@ -1955,7 +1994,7 @@ bigint_value_t bigintf_to_string(const bigintf_t num, char* out, bigint_value_t 
         return written;
     }
 
-    bigint_size_t size = max(num.numerator.size + 1, num.denominator.size) + 1;
+    bigint_size_t size = maxv(num.numerator.size + 1, num.denominator.size) + 1;
     bigint_value_t* tmp_alloc = bigint_alloc((size * 3) * sizeof(bigint_value_t));
     bigint_t q, r, nr;
     bigint_init_from(&q,  tmp_alloc                          , 0, size);
@@ -2032,7 +2071,7 @@ bigint_value_t bigintf_fprint(const bigintf_t num, FILE* stream, bigint_value_t 
         return written;
     }
 
-    bigint_size_t size = max(num.numerator.size + 1, num.denominator.size) + 1;
+    bigint_size_t size = maxv(num.numerator.size + 1, num.denominator.size) + 1;
     bigint_value_t* tmp_alloc = bigint_alloc((size * 3) * sizeof(bigint_value_t));
     bigint_t q, r, nr;
     bigint_init_from(&q,  tmp_alloc                          , 0, size);

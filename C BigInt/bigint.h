@@ -10,8 +10,11 @@
 // marks when variable must be unique in terms of other inputs/outputs
 #define UNIQUE(var) var
 
-// functions dont reuse output for calculations, with it BIGINT_UNIQUE_OUT dont matter
+// functions dont reuse output for calculations, with it UNIQUE(var) dont matter
 // #define BIGINT_NO_UNIQUE
+
+// make capacity of backing buffer always power of 2
+// #define BIGINT_POW2_GROW
 
 typedef uint64_t bigint_value_t;
 typedef int64_t  bigint_ivalue_t;
@@ -73,8 +76,13 @@ typedef enum {
 void bigint_init(bigint_t* num);
 void bigint_init_n(bigint_t* num, bigint_size_t n);
 void bigint_init_from(bigint_t* num, bigint_value_t* data, bigint_size_t size, bigint_size_t capacity); // scary
+void bigint_init_from0(bigint_t* num, bigint_value_t* data, bigint_size_t size, bigint_size_t capacity, bool negative); // scary
+
+void bigint_init_from_uint(bigint_t* out, bigint_value_t num);
+void bigint_init_from_int(bigint_t* out, bigint_ivalue_t num);
 
 void bigint_expand(bigint_t* num, bigint_size_t target);
+void bigint_expand_pow2(bigint_t* num, bigint_size_t target);
 void bigint_shrink(bigint_t* num);
 void bigint_clear(bigint_t* num);
 void bigint_destroy(bigint_t* num);
@@ -105,13 +113,13 @@ bool bigint_lesser(const bigint_t num1, const bigint_t num2);
 bool bigint_greater(const bigint_t num1, const bigint_t num2);
 bool bigint_eq(const bigint_t num1, const bigint_t num2);
 bool bigint_abseq(const bigint_t num1, const bigint_t num2);
-int bigint_abscmp(const bigint_t num1, const bigint_t num2);
-int bigint_cmp(const bigint_t num1, const bigint_t num2);
+int  bigint_abscmp(const bigint_t num1, const bigint_t num2);
+int  bigint_cmp(const bigint_t num1, const bigint_t num2);
 #define bigint_is_zero(num) ((num).size == 0)
 
 bool bigint_eq_uint(const bigint_t num1, bigint_value_t num2);
-int bigint_abscmp_uint(const bigint_t num1, bigint_value_t num2);
-int bigint_cmp_int(const bigint_t num1, bigint_ivalue_t num2);
+int  bigint_abscmp_uint(const bigint_t num1, bigint_value_t num2);
+int  bigint_cmp_int(const bigint_t num1, bigint_ivalue_t num2);
 
 void bigint_or(const bigint_t num1, const bigint_t num2, bigint_t* out);
 void bigint_and(const bigint_t num1, const bigint_t num2, bigint_t* out);
@@ -143,13 +151,6 @@ bigint_value_t bigint_fprint(const bigint_t num, FILE* stream, int flag);
 
 
 #ifndef BIGINT_NO_FRACTIONS
-
-// for from double conversion
-#include <float.h>
-
-#define DOUBLE_DIGITS DBL_DIG
-#define DOUBLE_BUF_SIZE (308 + DOUBLE_DIGITS + 3)
-
 
 void bigintf_init(bigintf_t* num);
 void bigintf_clear(bigintf_t* num);
