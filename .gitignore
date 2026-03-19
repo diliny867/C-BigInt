@@ -2,6 +2,7 @@
 *.d
 
 .vscode/
+.vs/
 
 # Object files
 *.o
