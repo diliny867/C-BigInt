@@ -1583,8 +1583,8 @@ static bigint_value_t bigint_to_string_dec_(const bigint_t num, char* out, bigin
 
 static bigint_value_t bigint_to_string_hex_(const bigint_t num, char* out, bigint_value_t max_size, int flag) {
     bigint_value_t written = 0;
-    int large_letters = flag & BI_LARGE_LETTERS;
-    int pad = flag & BI_PAD_HEX;
+    bool large_letters = flag & BI_LARGE_LETTERS;
+    bool pad = flag & BI_PAD_HEX;
     char* format;
 
     if(num.negative) {
@@ -1619,8 +1619,8 @@ bigint_value_t bigint_to_string(const bigint_t num, char* out, bigint_value_t ma
 
 static bigint_value_t bigint_fprint_hex_(const bigint_t num, FILE* stream, int flag) {
     bigint_value_t written = 0;
-    int large_letters = flag & BI_LARGE_LETTERS;
-    int pad = flag & BI_PAD_HEX;
+    bool large_letters = flag & BI_LARGE_LETTERS;
+    bool pad = flag & BI_PAD_HEX;
     char* format;
 
     //if(flag & BI_PRINT_COUNT){
@@ -2059,14 +2059,22 @@ double bigintf_to_f64(const bigintf_t num) {
     return res;
 }
 
-bigint_value_t bigintf_to_string_fraction_(const bigintf_t num, bigint_t nr, bigint_t q, bigint_t r, char* out, bigint_value_t max_size, bigint_value_t fraction_max, int flag) {
+static inline char int_to_hexchar(int num) {
+    if(num >= 0xA) {
+        return (char)num + 'a';
+    }
+    return (char)num + '0';
+}
+static bigint_value_t bigintf_write_fraction_(const bigintf_t num, bigint_t nr, bigint_t q, bigint_t r, void* out, bigint_value_t max_size, bigint_value_t fraction_max, int flag, bool to_file) {
     bigint_value_t written = 0;
 
-    // int bigint_flag = flag & (BI_BIF_START - 1) & ~BI_ADD0X; // also ignore preceding 0x 
+    int bigint_flag = flag & (BI_BIF_START - 1);
+    bool as_hex = bigint_flag & BI_HEX;
+    bool large_letters = flag & BI_LARGE_LETTERS;
 
     bigint_copy(r, &nr);
 
-    bigint_value_t denominator = 10;
+    bigint_value_t denominator = as_hex ? 0x10 : 10;
     bigint_t d;
     bigint_init_from(&d, &denominator, 1, 1);
 
@@ -2081,7 +2089,16 @@ bigint_value_t bigintf_to_string_fraction_(const bigintf_t num, bigint_t nr, big
 
         bigint_div(nr, num.denominator, &q, &r);
 
-        out[written++] = (char)bigint_to_uint(q) + '0';
+        char c = int_to_hexchar(bigint_to_uint(q));
+        if(as_hex && large_letters) {
+            c = toupper(c);
+        }
+        if(to_file) {
+            putc(c, (FILE*)out);
+        }else {
+            ((char*)out)[written] = c;
+        }
+        written++;
 
         if(bigint_is_zero(r) || (written - written_whole >= fraction_max) || (written >= max_size)){
             break;
@@ -2090,10 +2107,13 @@ bigint_value_t bigintf_to_string_fraction_(const bigintf_t num, bigint_t nr, big
         bigint_copy(r, &nr);
     }
 
-    out[written] = '\0';
+    if(!to_file) {
+        ((char*)out)[written] = '\0';
+    }
 
     return written;
 }
+
 bigint_value_t bigintf_to_string(const bigintf_t num, char* out, bigint_value_t max_size, bigint_value_t fraction_max, int flag) {
     if(!out) {
         return 0;
@@ -2143,20 +2163,22 @@ bigint_value_t bigintf_to_string(const bigintf_t num, char* out, bigint_value_t 
 
     written += snprintf2(out + written, max_size - written, ".");
 
-    written += bigintf_to_string_fraction_(num, nr, q, r, out + written, max_size - written, fraction_max, flag);
+    written += bigintf_write_fraction_(num, nr, q, r, out + written, max_size - written, fraction_max, flag, 0);
 
     bigint_free(tmp_alloc);
 
     return written;
 }
 
-bigint_value_t bigintf_fprint(const bigintf_t num, FILE* stream, bigint_value_t fraction_max, int flag){
+bigint_value_t bigintf_fprint(const bigintf_t num, FILE* stream, bigint_value_t fraction_max, int flag) {
     bigint_value_t written = 0;
 
+    int bigint_flag = flag & (BI_BIF_START - 1);
+
     if(!(flag & BIF_AS_DECIMAL)) {
-        written += bigint_fprint(num.numerator, stream, flag);
+        written += bigint_fprint(num.numerator, stream, bigint_flag);
         written += fprintf(stream, " / ");
-        written += bigint_fprint(num.denominator, stream, flag);
+        written += bigint_fprint(num.denominator, stream, bigint_flag);
         return written;
     }
 
@@ -2164,7 +2186,7 @@ bigint_value_t bigintf_fprint(const bigintf_t num, FILE* stream, bigint_value_t 
         if(num.numerator.negative) {
             written += fprintf(stream, "-");
         }
-        written += fprintf(stream, "inf");
+        written += fprintf(stream, bigint_flag & BI_LARGE_LETTERS ? "INF" : "inf");
         return written;
     }
 
@@ -2184,7 +2206,7 @@ bigint_value_t bigintf_fprint(const bigintf_t num, FILE* stream, bigint_value_t 
     }
 
     bigint_div(nr, num.denominator, &q, &r);
-    written += bigint_fprint(q, stream, 0);
+    written += bigint_fprint(q, stream, bigint_flag);
 
     if(bigint_is_zero(r)){
         bigint_free(tmp_alloc);
@@ -2194,32 +2216,7 @@ bigint_value_t bigintf_fprint(const bigintf_t num, FILE* stream, bigint_value_t 
 
     written += fprintf(stream, ".");
 
-    bigint_copy(r, &nr);
-
-    bigint_value_t denominator = 10;
-    bigint_t d;
-    bigint_init_from(&d, &denominator, 1, 1);
-
-    if(fraction_max <= 0) {
-        fraction_max = BIGINT_FRACTION_DECIMALS_PRINT_DEFAULT;
-    }
-
-    bigint_value_t written_whole = written;
-    while(true){
-        bigint_mul(nr, d, &q);
-        bigint_copy(q, &nr);
-
-        bigint_div(nr, num.denominator, &q, &r);
-
-        putc(bigint_to_uint(q) + '0', stream);
-        written++;
-
-        if(bigint_is_zero(r) || (written - written_whole >= fraction_max)){
-            break;
-        }
-
-        bigint_copy(r, &nr);
-    }
+    written += bigintf_write_fraction_(num, nr, q, r, stream, BIGINT_VALUE_MAX, fraction_max, flag, 1);
 
     bigint_free(tmp_alloc);
 

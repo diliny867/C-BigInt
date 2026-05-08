@@ -40,6 +40,8 @@ typedef enum {
 
 #define BIGINT_BASE (1llu << 63llu)
 
+#define BIGINT_VALUE_MAX (BIGINT_BASE - 1llu)
+
 
 #ifndef BIGINT_DEFAULT_INIT_WORD_COUNT
 # define BIGINT_DEFAULT_INIT_WORD_COUNT 1
@@ -54,7 +56,7 @@ typedef struct {
 } bigintf_t;
 
 typedef enum {
-    BIF_AS_DECIMAL = BI_BIF_START,
+    BIF_AS_DECIMAL = BI_BIF_START << 0,
 } bigintf_flag_e;
 
 #endif
