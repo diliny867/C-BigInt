@@ -236,9 +236,9 @@ void test_bigint_fractions() {
 
 int main(int argc, char** argv) {
 
-    test_bigints();
+    //test_bigints();
 
-    //test_bigint_fractions();
+    test_bigint_fractions();
 
     //example();
 

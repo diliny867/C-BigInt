@@ -88,6 +88,8 @@ void bigint_clear(bigint_t* num);
 void bigint_destroy(bigint_t* num);
 
 void bigint_copy(const bigint_t num, bigint_t* out);
+void bigint_clone(const bigint_t num, bigint_t* out); // should only use with before unused bigints
+void bigint_swap(bigint_t* num1, bigint_t* num2);
 
 void bigint_add(const bigint_t num1, const bigint_t num2, bigint_t* out);
 void bigint_sub(const bigint_t num1, const bigint_t num2, bigint_t* out);
@@ -157,6 +159,8 @@ void bigintf_clear(bigintf_t* num);
 void bigintf_destroy(bigintf_t* num);
 
 void bigintf_copy(const bigintf_t num, bigintf_t* out);
+void bigintf_clone(const bigintf_t num, bigintf_t* out); // should only use with before unused bigints
+void bigintf_swap(bigintf_t* num1, bigintf_t* num2);
 
 void bigintf_simplify(bigintf_t* num);
 
