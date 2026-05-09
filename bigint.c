@@ -2011,13 +2011,13 @@ static inline int bigintf_floor_ceil_round_(const bigintf_t num, bigintf_t* UNIQ
     return 0;
 }
 int bigintf_floor(const bigintf_t num, bigintf_t* UNIQUE(out)) {
-    bigintf_floor_ceil_round_(num, out, 0);
+    return bigintf_floor_ceil_round_(num, out, 0);
 }
 int bigintf_ceil(const bigintf_t num, bigintf_t* UNIQUE(out)) {
-    bigintf_floor_ceil_round_(num, out, 1);
+    return bigintf_floor_ceil_round_(num, out, 1);
 }
 int bigintf_round(const bigintf_t num, bigintf_t* UNIQUE(out)) {
-    bigintf_floor_ceil_round_(num, out, 2);
+    return bigintf_floor_ceil_round_(num, out, 2);
 }
 
 
