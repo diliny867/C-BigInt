@@ -100,6 +100,8 @@ static inline int snprintf2(char *buf, size_t size, char *format, ...){
 
 #define BIGINT_VALUE_POW10_MAX_COUNT 18
 #define BIGINT_VALUE_POW10_MAX_VALUE 1000000000000000000llu
+#define BIGINT_VALUE_POW16_MAX_COUNT 15
+#define BIGINT_VALUE_POW16_MAX_VALUE 0x1000000000000000
 
 
 static inline void bigint_zero_data(bigint_value_t* data, bigint_size_t size) {
@@ -1787,9 +1789,6 @@ void bigintf_swap(bigintf_t* num1, bigintf_t* num2){
     bigint_swap(&num1->denominator, &num2->denominator);
 }
 
-bool bigintf_is_zero(bigintf_t num){
-    return num.numerator.size == 0;
-}
 
 int bigintf_abscmp(const bigintf_t num1, const bigintf_t num2) {
     if(bigint_abseq(num1.denominator, num2.denominator)) {
@@ -1875,7 +1874,7 @@ void bigintf_simplify(bigintf_t* num){
     bigint_free(tmp_alloc);
 }
 
-static void bigintf_add_sub_(const bigintf_t num1, const bigintf_t num2, bigintf_t* out, bool sub){
+static inline void bigintf_add_sub_(const bigintf_t num1, const bigintf_t num2, bigintf_t* out, bool sub){
     if(!out){
         return;
     }
@@ -1919,7 +1918,7 @@ void bigintf_sub(const bigintf_t num1, const bigintf_t num2, bigintf_t* UNIQUE(o
     bigintf_add_sub_(num1, num2, out, 1);
 }
 
-static int bigintf_mul_div_(const bigintf_t num1, const bigintf_t num2, bigintf_t* UNIQUE(out), bool div){
+static inline int bigintf_mul_div_(const bigintf_t num1, const bigintf_t num2, bigintf_t* UNIQUE(out), bool div){
     if(!out){
         return 0;
     }
@@ -1955,6 +1954,70 @@ void bigintf_mul(const bigintf_t num1, const bigintf_t num2, bigintf_t* UNIQUE(o
 }
 int bigintf_div(const bigintf_t num1, const bigintf_t num2, bigintf_t* UNIQUE(out)){
     return bigintf_mul_div_(num1, num2, out, 1);
+}
+
+static inline int bigintf_floor_ceil_round_(const bigintf_t num, bigintf_t* UNIQUE(out), int op) {
+    if(!out) {
+        return 0;
+    }
+
+#ifdef BIGINT_NO_UNIQUE
+    bigintf_t* bigint_old_out__ = out;
+    bigintf_t bigint_tmp__ = { { 0, 0, 0, 0 }, { 0, 0, 0, 0 } };
+    out = &bigint_tmp__;
+
+    bigintf_init(out);
+#else
+    assert(num.numerator.data != out->numerator.data && num.denominator.data != out->denominator.data);
+#endif
+
+    if(bigint_is_zero(num.denominator)) {
+        return 1;
+    }
+
+    bigint_div(num.numerator, num.denominator, &out->numerator, &out->denominator); // get remainder, also reuse available memory
+
+    if(bigint_is_zero(out->denominator)) { // number is exact and wont be floored or ceiled
+        return 0;
+    }
+
+    bool ceil = op >= 1;
+    if(op == 2) { // check if remainder less than half denominator
+        if(num.denominator.size - out->denominator.size >= 2) { // 2 digits difference, definitely less
+            ceil = false;
+        }else {
+            bigint_rshift(num.denominator, 1, &out->numerator);
+            if(bigint_lesser(out->denominator, out->numerator)) { // remained < half denominator
+                ceil = false;
+            }
+        }
+    }
+
+    bigint_sub(num.numerator, out->denominator, &out->numerator); // floor result in out->numerator
+    if(ceil) {
+        bigint_add(out->numerator, num.denominator, &out->numerator); // ceil result in out->numerator
+    }
+
+    bigint_copy(num.denominator, &out->denominator);
+
+#ifdef BIGINT_NO_UNIQUE
+    bigintf_copy(*out, bigint_old_out__);
+    bigintf_destroy(out);
+    out = bigint_old_out__;
+#endif
+
+    bigintf_simplify(out);
+
+    return 0;
+}
+int bigintf_floor(const bigintf_t num, bigintf_t* UNIQUE(out)) {
+    bigintf_floor_ceil_round_(num, out, 0);
+}
+int bigintf_ceil(const bigintf_t num, bigintf_t* UNIQUE(out)) {
+    bigintf_floor_ceil_round_(num, out, 1);
+}
+int bigintf_round(const bigintf_t num, bigintf_t* UNIQUE(out)) {
+    bigintf_floor_ceil_round_(num, out, 2);
 }
 
 
@@ -2082,7 +2145,6 @@ static bigint_value_t bigintf_write_fraction_(const bigintf_t num, bigint_t nr, 
         fraction_max = BIGINT_FRACTION_DECIMALS_PRINT_DEFAULT;
     }
 
-    bigint_value_t written_whole = written;
     while(true) {
         bigint_mul(nr, d, &q);
         bigint_copy(q, &nr);
@@ -2100,7 +2162,7 @@ static bigint_value_t bigintf_write_fraction_(const bigintf_t num, bigint_t nr, 
         }
         written++;
 
-        if(bigint_is_zero(r) || (written - written_whole >= fraction_max) || (written >= max_size)){
+        if(bigint_is_zero(r) || (written >= fraction_max) || (written >= max_size)){
             break;
         }
 

@@ -93,42 +93,42 @@ void bigint_copy(const bigint_t num, bigint_t* out);
 void bigint_clone(const bigint_t num, bigint_t* out); // should only use with before unused bigints
 void bigint_swap(bigint_t* num1, bigint_t* num2);
 
-void bigint_add(const bigint_t num1, const bigint_t num2, bigint_t* out);
-void bigint_sub(const bigint_t num1, const bigint_t num2, bigint_t* out);
+void bigint_add(const bigint_t num1, const bigint_t num2, bigint_t* out); // a + b
+void bigint_sub(const bigint_t num1, const bigint_t num2, bigint_t* out); // a - b
 
-void bigint_inc(const bigint_t num, bigint_t* out);
-void bigint_dec(const bigint_t num, bigint_t* out);
+void bigint_inc(const bigint_t num, bigint_t* out); // a + 1
+void bigint_dec(const bigint_t num, bigint_t* out); // b - 1
 
-void bigint_mul(const bigint_t num1, const bigint_t num2, bigint_t* UNIQUE(out));
-int  bigint_div(const bigint_t num1, const bigint_t num2, bigint_t* UNIQUE(out), bigint_t* UNIQUE(r));
+void bigint_mul(const bigint_t num1, const bigint_t num2, bigint_t* UNIQUE(out));                      // a * b
+int  bigint_div(const bigint_t num1, const bigint_t num2, bigint_t* UNIQUE(out), bigint_t* UNIQUE(r)); // a / b
 
-int  bigint_mod(const bigint_t num1, const bigint_t num2, bigint_t* UNIQUE(out));
-int  bigint_sqrt(const bigint_t num, bool ceil, bigint_t* UNIQUE(out));
-int  bigint_pow(const bigint_t num1, const bigint_t num2, bigint_t* UNIQUE(out));
-int  bigint_fact(const bigint_t num, bigint_t* UNIQUE(out));
-void bigint_log2(const bigint_t num, bigint_t* out); // out is always in uint64, maybe output as it and not as bigint
-int  bigint_gcd(const bigint_t num1, const bigint_t num2, bigint_t* UNIQUE(out));
+int  bigint_mod(const bigint_t num1, const bigint_t num2, bigint_t* UNIQUE(out)); // a % b
+int  bigint_sqrt(const bigint_t num, bool ceil, bigint_t* UNIQUE(out));           // sqrt(a)
+int  bigint_pow(const bigint_t num1, const bigint_t num2, bigint_t* UNIQUE(out)); // a ^ b
+int  bigint_fact(const bigint_t num, bigint_t* UNIQUE(out));                      // a!
+void bigint_log2(const bigint_t num, bigint_t* out);                              // log2(a) and out is always in uint64, maybe output as it and not as bigint
+int  bigint_gcd(const bigint_t num1, const bigint_t num2, bigint_t* UNIQUE(out)); // gcd(a)
 
-void bigint_lshift(const bigint_t num, bigint_value_t shift, bigint_t* out);
-void bigint_rshift(const bigint_t num, bigint_value_t shift, bigint_t* out);
-void bigint_srshift(const bigint_t num, bigint_value_t shift, bigint_t* out); // fills high bits with 1 if number is negative and msb is 1
+void bigint_lshift(const bigint_t num, bigint_value_t shift, bigint_t* out);  // a << b
+void bigint_rshift(const bigint_t num, bigint_value_t shift, bigint_t* out);  // a >> b
+void bigint_srshift(const bigint_t num, bigint_value_t shift, bigint_t* out); // a >> b but fills high bits with 1 if number is negative and msb is 1
 
-bool bigint_lesser(const bigint_t num1, const bigint_t num2);
-bool bigint_greater(const bigint_t num1, const bigint_t num2);
-bool bigint_eq(const bigint_t num1, const bigint_t num2);
-bool bigint_abseq(const bigint_t num1, const bigint_t num2);
-int  bigint_abscmp(const bigint_t num1, const bigint_t num2);
-int  bigint_cmp(const bigint_t num1, const bigint_t num2);
-#define bigint_is_zero(num) ((num).size == 0)
+bool bigint_lesser(const bigint_t num1, const bigint_t num2);  // a < b
+bool bigint_greater(const bigint_t num1, const bigint_t num2); // a > b
+bool bigint_eq(const bigint_t num1, const bigint_t num2);      // a == b
+bool bigint_abseq(const bigint_t num1, const bigint_t num2);   // abs(a) == abs(b)
+int  bigint_abscmp(const bigint_t num1, const bigint_t num2);  // cmp(abs(a), abs(b))
+int  bigint_cmp(const bigint_t num1, const bigint_t num2);     // cmp(a, b)
+#define bigint_is_zero(num) ((num).size == 0)                  // a == 0
 
-bool bigint_eq_uint(const bigint_t num1, bigint_value_t num2);
-int  bigint_abscmp_uint(const bigint_t num1, bigint_value_t num2);
-int  bigint_cmp_int(const bigint_t num1, bigint_ivalue_t num2);
+bool bigint_eq_uint(const bigint_t num1, bigint_value_t num2);     // a == uint(b)
+int  bigint_abscmp_uint(const bigint_t num1, bigint_value_t num2); // cmp(abs(a) == uint(b))
+int  bigint_cmp_int(const bigint_t num1, bigint_ivalue_t num2);    // cmp(a, int(b))
 
-void bigint_or(const bigint_t num1, const bigint_t num2, bigint_t* out);
-void bigint_and(const bigint_t num1, const bigint_t num2, bigint_t* out);
-void bigint_xor(const bigint_t num1, const bigint_t num2, bigint_t* out);
-void bigint_inv(const bigint_t num, bigint_t* out);
+void bigint_or(const bigint_t num1, const bigint_t num2, bigint_t* out);  // a | b
+void bigint_and(const bigint_t num1, const bigint_t num2, bigint_t* out); // a & b
+void bigint_xor(const bigint_t num1, const bigint_t num2, bigint_t* out); // a ^ b
+void bigint_inv(const bigint_t num, bigint_t* out);                       // ~a
 
 bool bigint_fits_int(const bigint_t num, bool is_signed);
 
@@ -166,7 +166,7 @@ void bigintf_swap(bigintf_t* num1, bigintf_t* num2);
 
 void bigintf_simplify(bigintf_t* num);
 
-bool bigintf_is_zero(const bigintf_t num);
+#define bigintf_is_zero(num) ((num).numerator.size == 0)
 
 int bigintf_abscmp(const bigintf_t num1, const bigintf_t num2);
 int bigintf_cmp(const bigintf_t num1, const bigintf_t num2);
@@ -177,6 +177,10 @@ void bigintf_sub(const bigintf_t num1, const bigintf_t num2, bigintf_t* UNIQUE(o
 
 void bigintf_mul(const bigintf_t num1, const bigintf_t num2, bigintf_t* UNIQUE(out));
 int  bigintf_div(const bigintf_t num1, const bigintf_t num2, bigintf_t* UNIQUE(out));
+
+int  bigintf_floor(const bigintf_t num, bigintf_t* UNIQUE(out));
+int  bigintf_ceil(const bigintf_t num, bigintf_t* UNIQUE(out));
+int  bigintf_round(const bigintf_t num, bigintf_t* UNIQUE(out));
 
 void bigintf_from_bigint(const bigint_t num, bigintf_t* out);
 void bigintf_from_bigints(const bigint_t num, bigint_t den, bigintf_t* out);
