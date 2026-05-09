@@ -13,6 +13,7 @@ To and From Integers
 
 ### Big Integers Fractions:
 Addition, Substraction, Multiplication, Division \
+Round, Floor, Ceil \
 Simplification \
 Base 10 Decimal and Fractional Printing \
 To and From Base 10 Strings \
